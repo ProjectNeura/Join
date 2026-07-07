@@ -438,8 +438,8 @@ async function renderJob(slug) {
         <h2>Apply for this role</h2>
         <div id="form-notice"></div>
         <div class="form-grid">
-          <label>Full name <input name="full_name" autocomplete="name" required></label>
-          <label>Email <input name="email" type="email" autocomplete="email" required></label>
+          <label>Full name *<input name="full_name" autocomplete="name" required></label>
+          <label>Email *<input name="email" type="email" autocomplete="email" required></label>
           ${renderStandardApplicationFields(standardFields)}
           ${renderCustomApplicationFields(formFields)}
         </div>
