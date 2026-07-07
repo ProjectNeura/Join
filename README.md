@@ -27,9 +27,9 @@ When SMTP secrets are configured, applicants also receive a confirmation email w
 2. Create the local D1 database and apply migrations:
 
    ```bash
-   npx wrangler d1 create project-neura-portal
+   npx wrangler d1 create projectneura-join
    npm run db:migrate:local
-   npx wrangler d1 execute project-neura-portal --local --file seed.sql
+   npx wrangler d1 execute projectneura-join --local --file seed.sql
    ```
 
 3. Start Pages dev:
@@ -45,7 +45,7 @@ The app will be available at the URL printed by Wrangler, usually `http://localh
 1. Create a D1 database:
 
    ```bash
-   npx wrangler d1 create project-neura-portal
+   npx wrangler d1 create projectneura-join
    ```
 
 2. Copy the generated `database_id` into `wrangler.toml`.
