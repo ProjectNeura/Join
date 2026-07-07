@@ -541,6 +541,11 @@ textarea {
   gap: 18px;
 }
 
+.check-tools {
+  display: grid;
+  gap: 14px;
+}
+
 .check-layout {
   display: grid;
   grid-template-columns: minmax(320px, 0.66fr) minmax(0, 1fr);
@@ -550,6 +555,16 @@ textarea {
 
 .check-result:empty {
   display: none;
+}
+
+.recovery-panel h2,
+.recovered-codes h2 {
+  margin-bottom: 8px;
+}
+
+.recovery-list {
+  display: grid;
+  gap: 12px;
 }
 
 .retrieved-application {
@@ -628,13 +643,52 @@ textarea {
 
 .field-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.45fr) minmax(180px, 1fr) minmax(105px, 0.36fr) auto;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.58);
+}
+
+.field-row label {
+  min-width: 0;
+}
+
+.field-row label:nth-child(1) {
+  grid-column: span 3;
+}
+
+.field-row label:nth-child(2) {
+  grid-column: span 2;
+}
+
+.field-row label:nth-child(3) {
+  grid-column: span 3;
+}
+
+.field-row label:nth-child(4) {
+  grid-column: span 4;
+}
+
+.field-required {
+  grid-column: span 2;
+}
+
+.field-remove {
+  grid-column: span 2;
+  min-width: 0;
+  width: 100%;
+  padding-inline: 10px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.35;
+  margin-top: -2px;
 }
 
 .checkbox-label {
@@ -876,7 +930,16 @@ td small {
   }
 
   .field-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-row label:nth-child(1),
+  .field-row label:nth-child(2),
+  .field-row label:nth-child(3),
+  .field-row label:nth-child(4),
+  .field-required,
+  .field-remove {
+    grid-column: span 2;
   }
 
   .standard-field-row {

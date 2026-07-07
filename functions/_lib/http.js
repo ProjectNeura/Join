@@ -57,6 +57,7 @@ export function normalizeFormFields(value) {
       const label = normalizeText(field?.label).slice(0, 120);
       if (!label) return null;
       const type = allowedTypes.has(field?.type) ? field.type : "text";
+      const hint = normalizeText(field?.hint).slice(0, 240);
       const fallbackId = label
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
@@ -73,6 +74,7 @@ export function normalizeFormFields(value) {
       return {
         id,
         label,
+        hint,
         type,
         required: Boolean(field?.required),
         options

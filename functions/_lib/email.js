@@ -8,6 +8,7 @@ export const emailTemplateVariables = [
   "job_location",
   "job_employment_type",
   "lookup_code",
+  "recovery_code",
   "check_url"
 ];
 
@@ -53,6 +54,24 @@ export const defaultEmailTemplates = {
       "Thank you for applying to {{job_title}}. After review, we will not be moving forward with your application for this role.",
       "",
       "We appreciate the time and care you put into applying, and we wish you the best in your search.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  },
+  recovery: {
+    key: "recovery",
+    label: "Application code recovery",
+    subject: "Project Neura application code recovery",
+    body: [
+      "Hi,",
+      "",
+      "Use this verification code to retrieve your Project Neura application check-back code:",
+      "",
+      "{{recovery_code}}",
+      "",
+      "This verification code expires in 15 minutes.",
+      "",
+      "If you did not request this email, you can ignore it.",
       "",
       "Project Neura"
     ].join("\n")
@@ -145,6 +164,7 @@ function createTemplateContext(application, job = {}, extras = {}) {
     job_location: job.location || application.job_location || "",
     job_employment_type: job.employment_type || application.job_employment_type || "",
     lookup_code: application.lookup_code || "",
+    recovery_code: extras.recoveryCode || extras.recovery_code || "",
     check_url: extras.checkUrl || extras.check_url || ""
   };
 }
@@ -240,6 +260,23 @@ export async function sendApplicationDecisionEmail(env, db, application, job, de
     from,
     replyTo,
     to: application.email,
+    subject: renderEmailTemplate(template.subject, context),
+    text: renderEmailTemplate(template.body, context)
+  });
+
+  return { sent: true };
+}
+
+export async function sendApplicationRecoveryCode(env, db, email, recoveryCode) {
+  const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
+  const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
+  const template = await getEmailTemplate(db, "recovery");
+  const context = createTemplateContext({ email }, {}, { recoveryCode });
+
+  await sendSmtp(env, {
+    from,
+    replyTo,
+    to: email,
     subject: renderEmailTemplate(template.subject, context),
     text: renderEmailTemplate(template.body, context)
   });

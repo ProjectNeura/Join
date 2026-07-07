@@ -141,20 +141,21 @@ function renderCustomApplicationFields(fields) {
   return parseArray(fields).map((field) => {
     const required = field.required ? "required" : "";
     const label = `${escapeHtml(field.label)}${field.required ? " *" : ""}`;
+    const hint = field.hint ? `<span class="field-hint">${escapeHtml(field.hint)}</span>` : "";
     const name = fieldInputName(field.id);
 
     if (field.type === "textarea") {
-      return `<label class="full">${label}<textarea name="${escapeHtml(name)}" ${required}></textarea></label>`;
+      return `<label class="full"><span>${label}</span>${hint}<textarea name="${escapeHtml(name)}" ${required}></textarea></label>`;
     }
 
     if (field.type === "url") {
-      return `<label class="full">${label}<input name="${escapeHtml(name)}" type="url" inputmode="url" ${required}></label>`;
+      return `<label class="full"><span>${label}</span>${hint}<input name="${escapeHtml(name)}" type="url" inputmode="url" ${required}></label>`;
     }
 
     if (field.type === "select") {
       const options = parseArray(field.options);
       return `
-        <label class="full">${label}
+        <label class="full"><span>${label}</span>${hint}
           <select name="${escapeHtml(name)}" ${required}>
             <option value="">Select an option</option>
             ${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}
@@ -163,7 +164,7 @@ function renderCustomApplicationFields(fields) {
       `;
     }
 
-    return `<label class="full">${label}<input name="${escapeHtml(name)}" ${required}></label>`;
+    return `<label class="full"><span>${label}</span>${hint}<input name="${escapeHtml(name)}" ${required}></label>`;
   }).join("");
 }
 
@@ -367,18 +368,38 @@ function renderCheck() {
       <div class="page-head">
         <p class="eyebrow">Application check-back</p>
         <h1>Retrieve your submitted application.</h1>
-        <p>Enter the private code you received after submitting. The code is the key to viewing your application, so keep it somewhere safe.</p>
+        <p>Enter the private code you received after submitting. If you lost it, verify your email to recover the code.</p>
       </div>
       <div class="check-layout">
-        <form class="panel" id="check-form">
-          <h2>Enter your code</h2>
-          <div id="check-notice"></div>
-          <label class="full">Application code <input name="lookup_code" autocomplete="off" placeholder="PN-XXXX-XXXX-XXXX-XXXX" required></label>
-          <div class="form-actions">
-            <button class="primary" type="submit">Retrieve application</button>
-            <a class="button ghost" href="/" data-link>Back to jobs</a>
-          </div>
-        </form>
+        <div class="check-tools">
+          <form class="panel" id="check-form">
+            <h2>Enter your code</h2>
+            <div id="check-notice"></div>
+            <label class="full">Application code <input name="lookup_code" autocomplete="off" placeholder="PN-XXXX-XXXX-XXXX-XXXX" required></label>
+            <div class="form-actions">
+              <button class="primary" type="submit">Retrieve application</button>
+              <a class="button ghost" href="/" data-link>Back to jobs</a>
+            </div>
+          </form>
+          <form class="panel recovery-panel" id="recovery-request-form">
+            <h2>Lost your code?</h2>
+            <p class="muted">Send a verification code to the email address used on your application.</p>
+            <div id="recovery-request-notice"></div>
+            <label class="full">Email <input name="email" type="email" autocomplete="email" required></label>
+            <div class="form-actions">
+              <button type="submit">Send verification code</button>
+            </div>
+          </form>
+          <form class="panel recovery-panel" id="recovery-verify-form">
+            <h2>Verify email</h2>
+            <div id="recovery-verify-notice"></div>
+            <label class="full">Email <input name="email" type="email" autocomplete="email" required></label>
+            <label class="full">Verification code <input name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="123456" required></label>
+            <div class="form-actions">
+              <button type="submit">Recover application code</button>
+            </div>
+          </form>
+        </div>
         <div id="check-result" class="check-result"></div>
       </div>
     </section>
@@ -403,6 +424,110 @@ function renderCheck() {
     } finally {
       button.disabled = false;
     }
+  });
+
+  app.querySelector("#recovery-request-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const notice = form.querySelector("#recovery-request-notice");
+    const button = form.querySelector("button[type='submit']");
+    const email = new FormData(form).get("email");
+    notice.innerHTML = "";
+    button.disabled = true;
+    try {
+      const response = await request("/api/applications/recovery/request", {
+        method: "POST",
+        body: JSON.stringify({ email })
+      });
+      app.querySelector("#recovery-verify-form").elements.email.value = email;
+      notice.innerHTML = `<p class="notice">${escapeHtml(response.message || "If that email matches an application, we sent a verification code.")}</p>`;
+    } catch (error) {
+      notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  app.querySelector("#recovery-verify-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const notice = form.querySelector("#recovery-verify-notice");
+    const result = app.querySelector("#check-result");
+    const button = form.querySelector("button[type='submit']");
+    const data = new FormData(form);
+    notice.innerHTML = "";
+    result.innerHTML = "";
+    button.disabled = true;
+    try {
+      const response = await request("/api/applications/recovery/verify", {
+        method: "POST",
+        body: JSON.stringify({
+          email: data.get("email"),
+          code: data.get("code")
+        })
+      });
+      result.innerHTML = renderRecoveredApplicationCodes(response.applications);
+      bindRecoveredCodeButtons(result);
+    } catch (error) {
+      notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function renderRecoveredApplicationCodes(applications) {
+  const rows = parseArray(applications);
+  if (!rows.length) {
+    return `
+      <div class="panel">
+        <h2>No applications found</h2>
+        <p class="muted">No submitted applications are currently tied to that email address.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="panel recovered-codes">
+      <h2>Recovered application codes</h2>
+      <div class="recovery-list">
+        ${rows.map((application) => `
+          <article class="answer-row">
+            <div class="panel-toolbar">
+              <div>
+                <strong>${escapeHtml(application.job_title)}</strong>
+                <p class="muted">${escapeHtml([application.job_team, application.created_at ? `Submitted ${formatDate(application.created_at)}` : ""].filter(Boolean).join(" · "))}</p>
+              </div>
+              <span class="status-pill ${applicationStatusClass(application.status)}">${escapeHtml(formatApplicationStatus(application.status))}</span>
+            </div>
+            <div class="lookup-code">${escapeHtml(application.lookup_code)}</div>
+            <button type="button" data-recovered-code="${escapeHtml(application.lookup_code)}">View application</button>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function bindRecoveredCodeButtons(container) {
+  container.querySelectorAll("[data-recovered-code]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const code = button.dataset.recoveredCode;
+      const checkForm = app.querySelector("#check-form");
+      const notice = checkForm.querySelector("#check-notice");
+      const result = app.querySelector("#check-result");
+      checkForm.elements.lookup_code.value = code;
+      notice.innerHTML = "";
+      button.disabled = true;
+      try {
+        const { application } = await request(`/api/applications/${encodeURIComponent(code)}`);
+        result.innerHTML = renderApplicationDetails(application);
+        result.querySelector("[data-withdraw-application]")?.addEventListener("click", () => withdrawApplication(application, result, notice));
+      } catch (error) {
+        notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+        button.disabled = false;
+      }
+    });
   });
 }
 
@@ -593,6 +718,7 @@ function renderJobsAdmin() {
 function renderFieldBuilderRow(field = {}) {
   const id = field.id || "";
   const label = field.label || "";
+  const hint = field.hint || "";
   const type = field.type || "text";
   const options = parseArray(field.options).join(", ");
   return `
@@ -604,9 +730,10 @@ function renderFieldBuilderRow(field = {}) {
         </select>
       </label>
       <label>Options <input name="field_options" value="${escapeHtml(options)}" placeholder="For select: Option A, Option B"></label>
-      <label class="checkbox-label"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
+      <label>Hint <input name="field_hint" value="${escapeHtml(hint)}" placeholder="Short helper text"></label>
+      <label class="checkbox-label field-required"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
       <input name="field_id" type="hidden" value="${escapeHtml(id)}">
-      <button class="danger" type="button" data-field-remove>Remove</button>
+      <button class="danger field-remove" type="button" data-field-remove>Remove</button>
     </div>
   `;
 }
@@ -664,6 +791,7 @@ function collectJobPayload(form) {
       return {
         id,
         label,
+        hint: row.querySelector('[name="field_hint"]').value.trim(),
         type,
         required: row.querySelector('[name="field_required"]').checked,
         options
