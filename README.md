@@ -88,3 +88,5 @@ SMTP_REPLY_TO=join@projectneura.org
 In Cloudflare Pages, add these under Settings > Variables and Secrets and encrypt `SMTP_PASSWORD`. For local development, put them in `.dev.vars`; do not commit that file.
 
 Use port `587` with `SMTP_SECURE=starttls` by default. Cloudflare Workers TCP sockets cannot connect to SMTP port `25`.
+
+After setting or changing Pages secrets, redeploy the project so the Functions runtime receives the new values. The admin panel includes an Email tab that sends a test message through the same SMTP path used by application confirmations.

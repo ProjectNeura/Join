@@ -3,6 +3,20 @@ import { connect } from "cloudflare:sockets";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+export function getSmtpStatus(env) {
+  const missing = ["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"].filter((key) => !env[key]);
+  return {
+    configured: missing.length === 0,
+    missing,
+    host: env.SMTP_HOST || "",
+    port: Number(env.SMTP_PORT || 587),
+    secureTransport: env.SMTP_SECURE || (Number(env.SMTP_PORT || 587) === 465 ? "on" : "starttls"),
+    username: env.SMTP_USERNAME || "",
+    from: env.SMTP_FROM || (env.SMTP_USERNAME ? `Project Neura <${env.SMTP_USERNAME}>` : ""),
+    replyTo: env.SMTP_REPLY_TO || env.SMTP_USERNAME || ""
+  };
+}
+
 function hasSmtpConfig(env) {
   return Boolean(env.SMTP_HOST && env.SMTP_USERNAME && env.SMTP_PASSWORD);
 }
@@ -82,7 +96,12 @@ function buildMessage({ from, replyTo, to, subject, text }) {
   return `${headers.join("\r\n")}\r\n\r\n${dotStuff(text)}\r\n.`;
 }
 
-async function sendSmtp(env, message) {
+export async function sendSmtp(env, message) {
+  if (!hasSmtpConfig(env)) {
+    const status = getSmtpStatus(env);
+    throw new Error(`Missing SMTP configuration: ${status.missing.join(", ")}`);
+  }
+
   const host = env.SMTP_HOST;
   const port = Number(env.SMTP_PORT || 587);
   const secureTransport = env.SMTP_SECURE || (port === 465 ? "on" : "starttls");

@@ -5,7 +5,8 @@ const state = {
   adminJobs: [],
   applications: [],
   applicationJobId: "all",
-  editingJobId: null
+  editingJobId: null,
+  smtpStatus: null
 };
 
 const defaultStandardFields = [
@@ -222,7 +223,7 @@ async function renderHome() {
       <div class="hero-copy">
         <p class="eyebrow">Careers at Project Neura</p>
         <h1>Work on intelligence that feels effortless.</h1>
-        <p>Join the team designing precise, useful systems for the next generation of applied AI.</p>
+        <p>Join the team extending the frontier of machine learning.</p>
         <div class="hero-actions">
           <a class="button primary" href="#open-roles">See open roles</a>
           <a class="button" href="/check" data-link>Check an application</a>
@@ -373,6 +374,7 @@ async function renderAdmin() {
         <div class="admin-tabs" role="group" aria-label="Admin sections">
           <button type="button" data-admin-tab="jobs" aria-pressed="${state.adminTab === "jobs"}">Jobs</button>
           <button type="button" data-admin-tab="applications" aria-pressed="${state.adminTab === "applications"}">Applications</button>
+          <button type="button" data-admin-tab="email" aria-pressed="${state.adminTab === "email"}">Email</button>
         </div>
       </div>
       <div id="admin-content"></div>
@@ -399,6 +401,8 @@ async function loadAdminData() {
 function renderAdminContent() {
   if (state.adminTab === "applications") {
     renderApplicationsAdmin();
+  } else if (state.adminTab === "email") {
+    renderEmailAdmin();
   } else {
     renderJobsAdmin();
   }
@@ -708,6 +712,67 @@ function renderApplicationsAdmin() {
   container.querySelector("#application-filter").addEventListener("change", (event) => {
     state.applicationJobId = event.target.value;
     renderApplicationsAdmin();
+  });
+}
+
+async function renderEmailAdmin() {
+  const container = app.querySelector("#admin-content");
+  container.innerHTML = `
+    <div class="panel">
+      <div class="panel-toolbar">
+        <div>
+          <h2>Email delivery</h2>
+          <p class="muted">Send a test message through the configured SMTP account.</p>
+        </div>
+      </div>
+      <div id="email-status" class="notice"><p>Checking SMTP settings...</p></div>
+      <form id="email-test-form" class="form-grid">
+        <label class="full">Test recipient <input name="to" type="email" placeholder="name@example.com" required></label>
+        <div class="form-actions full">
+          <button class="primary" type="submit">Send test email</button>
+        </div>
+      </form>
+      <div id="email-test-result"></div>
+    </div>
+  `;
+
+  const statusBox = container.querySelector("#email-status");
+  const resultBox = container.querySelector("#email-test-result");
+  const form = container.querySelector("#email-test-form");
+
+  try {
+    const { smtp } = await request("/api/admin/email-test");
+    state.smtpStatus = smtp;
+    statusBox.className = `notice${smtp.configured ? "" : " error"}`;
+    statusBox.innerHTML = smtp.configured
+      ? `<p>SMTP is configured for ${escapeHtml(smtp.username)} via ${escapeHtml(smtp.host)}:${escapeHtml(smtp.port)} using ${escapeHtml(smtp.secureTransport)}.</p>`
+      : `<p>Missing SMTP secrets: ${smtp.missing.map(escapeHtml).join(", ")}.</p>`;
+    const recipient = form.elements.to;
+    if (!recipient.value && smtp.username) {
+      recipient.value = smtp.username;
+    }
+  } catch (error) {
+    statusBox.className = "notice error";
+    statusBox.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = form.querySelector("button");
+    const to = new FormData(form).get("to");
+    button.disabled = true;
+    resultBox.innerHTML = `<p class="notice">Sending test email...</p>`;
+    try {
+      const result = await request("/api/admin/email-test", {
+        method: "POST",
+        body: JSON.stringify({ to })
+      });
+      resultBox.innerHTML = `<p class="notice">Test email accepted by SMTP for ${escapeHtml(result.to)}.</p>`;
+    } catch (error) {
+      resultBox.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
   });
 }
 
