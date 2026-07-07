@@ -23,11 +23,6 @@ export async function onRequestPost({ request, env }) {
       return error("Choose admission or rejection", 422);
     }
 
-    const smtp = getSmtpStatus(env);
-    if (!smtp.configured) {
-      return error(`Missing SMTP configuration: ${smtp.missing.join(", ")}`, 422);
-    }
-
     const placeholders = ids.map(() => "?").join(", ");
     const { results } = await db.prepare(`
       SELECT applications.*, jobs.title AS job_title
@@ -36,6 +31,22 @@ export async function onRequestPost({ request, env }) {
       WHERE applications.id IN (${placeholders})
       ORDER BY applications.created_at DESC
     `).bind(...ids).all();
+
+    const admittedSelections = results.filter((application) => application.status === "admitted");
+    const rejectedSelections = results.filter((application) => application.status === "rejected");
+
+    if (decision === "admitted" && rejectedSelections.length) {
+      return error(`Admission emails are blocked because ${rejectedSelections.length} selected applicant${rejectedSelections.length === 1 ? " is" : "s are"} already rejected.`, 409);
+    }
+
+    if (decision === "rejected" && admittedSelections.length) {
+      return error(`Rejection emails are blocked because ${admittedSelections.length} selected applicant${admittedSelections.length === 1 ? " is" : "s are"} already admitted.`, 409);
+    }
+
+    const smtp = getSmtpStatus(env);
+    if (!smtp.configured) {
+      return error(`Missing SMTP configuration: ${smtp.missing.join(", ")}`, 422);
+    }
 
     const sent = [];
     const failed = [];

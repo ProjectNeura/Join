@@ -743,6 +743,14 @@ td small {
   background: rgba(255, 255, 255, 0.58);
 }
 
+.mistake-guard {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .application-card {
   padding: 18px;
 }

@@ -1,16 +1,18 @@
-import { connect } from "cloudflare:sockets";
+const defaultSmtpApiUrl = "https://smtpapi.mxroute.com/";
+const defaultSmtpTimeoutMs = 12000;
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+function getSmtpTimeoutMs(env) {
+  const value = Number(env.SMTP_TIMEOUT_MS || defaultSmtpTimeoutMs);
+  return Number.isFinite(value) && value >= 1000 ? value : defaultSmtpTimeoutMs;
+}
 
 export function getSmtpStatus(env) {
   const missing = ["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"].filter((key) => !env[key]);
   return {
     configured: missing.length === 0,
     missing,
-    host: env.SMTP_HOST || "",
-    port: Number(env.SMTP_PORT || 587),
-    secureTransport: env.SMTP_SECURE || (Number(env.SMTP_PORT || 587) === 465 ? "on" : "starttls"),
+    apiUrl: env.SMTP_API_URL || defaultSmtpApiUrl,
+    server: env.SMTP_HOST || "",
     username: env.SMTP_USERNAME || "",
     from: env.SMTP_FROM || (env.SMTP_USERNAME ? `Project Neura <${env.SMTP_USERNAME}>` : ""),
     replyTo: env.SMTP_REPLY_TO || env.SMTP_USERNAME || ""
@@ -21,79 +23,24 @@ function hasSmtpConfig(env) {
   return Boolean(env.SMTP_HOST && env.SMTP_USERNAME && env.SMTP_PASSWORD);
 }
 
-function encodeBase64(value) {
-  return btoa(value);
-}
-
 function normalizeAddress(value) {
   const text = String(value || "").trim();
   const match = text.match(/<([^>]+)>/);
   return match ? match[1] : text;
 }
 
-function dotStuff(value) {
-  return value.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..");
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
 }
 
-function createLineReader(socket) {
-  const reader = socket.readable.getReader();
-  let buffer = "";
-
-  return async function readResponse() {
-    while (true) {
-      const lineEnd = buffer.indexOf("\r\n");
-      if (lineEnd !== -1) {
-        const line = buffer.slice(0, lineEnd);
-        buffer = buffer.slice(lineEnd + 2);
-        const lines = [line];
-        while (true) {
-          const nextEnd = buffer.indexOf("\r\n");
-          if (nextEnd === -1) break;
-          const nextLine = buffer.slice(0, nextEnd);
-          buffer = buffer.slice(nextEnd + 2);
-          lines.push(nextLine);
-          if (/^\d{3} /.test(nextLine)) {
-            return lines;
-          }
-        }
-        if (/^\d{3} /.test(line)) {
-          return lines;
-        }
-      }
-
-      const { value, done } = await reader.read();
-      if (done) {
-        throw new Error("SMTP connection closed unexpectedly");
-      }
-      buffer += decoder.decode(value, { stream: true });
-    }
-  };
-}
-
-function assertSmtpOk(lines, expectedCodes) {
-  const finalLine = lines[lines.length - 1] || "";
-  const code = Number(finalLine.slice(0, 3));
-  if (!expectedCodes.includes(code)) {
-    throw new Error(`SMTP error: ${lines.join(" | ")}`);
-  }
-}
-
-async function writeCommand(writer, command) {
-  await writer.write(encoder.encode(`${command}\r\n`));
-}
-
-function buildMessage({ from, replyTo, to, subject, text }) {
-  const headers = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    replyTo ? `Reply-To: ${replyTo}` : "",
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit"
-  ].filter(Boolean);
-
-  return `${headers.join("\r\n")}\r\n\r\n${dotStuff(text)}\r\n.`;
+function textToHtml(value) {
+  return escapeHtml(value).replace(/\r?\n/g, "<br>");
 }
 
 export async function sendSmtp(env, message) {
@@ -102,56 +49,45 @@ export async function sendSmtp(env, message) {
     throw new Error(`Missing SMTP configuration: ${status.missing.join(", ")}`);
   }
 
-  const host = env.SMTP_HOST;
-  const port = Number(env.SMTP_PORT || 587);
-  const secureTransport = env.SMTP_SECURE || (port === 465 ? "on" : "starttls");
-  const from = env.SMTP_FROM || env.SMTP_USERNAME;
-  const fromAddress = normalizeAddress(from);
-  const toAddress = normalizeAddress(message.to);
-  let socket = connect({ hostname: host, port }, { secureTransport });
-  await socket.opened;
-  let readResponse = createLineReader(socket);
-  let writer = socket.writable.getWriter();
+  const apiUrl = env.SMTP_API_URL || defaultSmtpApiUrl;
+  const fromAddress = normalizeAddress(message.from || env.SMTP_FROM || env.SMTP_USERNAME);
+  const timeoutMs = getSmtpTimeoutMs(env);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+  const payload = {
+    server: env.SMTP_HOST,
+    username: env.SMTP_USERNAME,
+    password: env.SMTP_PASSWORD,
+    from: fromAddress,
+    to: normalizeAddress(message.to),
+    subject: message.subject,
+    body: textToHtml(message.text || message.body || "")
+  };
+
+  let response;
   try {
-    assertSmtpOk(await readResponse(), [220]);
-    await writeCommand(writer, `EHLO ${env.SMTP_HELO || "projectneura.org"}`);
-    assertSmtpOk(await readResponse(), [250]);
-
-    if (secureTransport === "starttls") {
-      await writeCommand(writer, "STARTTLS");
-      assertSmtpOk(await readResponse(), [220]);
-      writer.releaseLock();
-      socket = socket.startTls();
-      await socket.opened;
-      readResponse = createLineReader(socket);
-      writer = socket.writable.getWriter();
-      await writeCommand(writer, `EHLO ${env.SMTP_HELO || "projectneura.org"}`);
-      assertSmtpOk(await readResponse(), [250]);
+    response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("SMTP API timed out while sending email");
     }
-
-    await writeCommand(writer, "AUTH LOGIN");
-    assertSmtpOk(await readResponse(), [334]);
-    await writeCommand(writer, encodeBase64(env.SMTP_USERNAME));
-    assertSmtpOk(await readResponse(), [334]);
-    await writeCommand(writer, encodeBase64(env.SMTP_PASSWORD));
-    assertSmtpOk(await readResponse(), [235]);
-    await writeCommand(writer, `MAIL FROM:<${fromAddress}>`);
-    assertSmtpOk(await readResponse(), [250]);
-    await writeCommand(writer, `RCPT TO:<${toAddress}>`);
-    assertSmtpOk(await readResponse(), [250, 251]);
-    await writeCommand(writer, "DATA");
-    assertSmtpOk(await readResponse(), [354]);
-    await writeCommand(writer, buildMessage({ ...message, from }));
-    assertSmtpOk(await readResponse(), [250]);
-    await writeCommand(writer, "QUIT");
-    assertSmtpOk(await readResponse(), [221]);
+    throw error;
   } finally {
-    try {
-      writer.releaseLock();
-    } catch {}
-    await socket.close().catch(() => {});
+    clearTimeout(timeoutId);
   }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.success !== true) {
+    throw new Error(result.message || `SMTP API request failed with HTTP ${response.status}`);
+  }
+
+  return result;
 }
 
 export async function sendApplicationConfirmation(env, application, job, checkUrl) {

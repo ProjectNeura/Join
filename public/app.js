@@ -58,18 +58,32 @@ function applicationStatusClass(value) {
 }
 
 const request = async (url, options = {}) => {
-  const response = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || "Request failed");
+  const { timeoutMs, ...fetchOptions } = options;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(fetchOptions.headers || {})
+      },
+      ...fetchOptions,
+      ...(controller ? { signal: controller.signal } : {})
+    }).catch((error) => {
+      if (error.name === "AbortError") {
+        throw new Error("Request timed out. The email server did not respond.");
+      }
+      throw error;
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Request failed");
+    }
+    return payload;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-  return payload;
 };
 
 const setActiveNav = () => {
@@ -691,8 +705,17 @@ function renderApplicationsAdmin() {
   const filtered = state.applicationStatusFilter === "all"
     ? byJob
     : byJob.filter((application) => application.status === state.applicationStatusFilter);
+  const selectedApplications = state.applications.filter((application) => state.selectedApplicationIds.has(application.id));
   const selectedVisibleCount = filtered.filter((application) => state.selectedApplicationIds.has(application.id)).length;
   const selectedCount = state.selectedApplicationIds.size;
+  const selectedUnderReviewCount = selectedApplications.filter((application) => application.status === "under_review").length;
+  const selectedAdmittedCount = selectedApplications.filter((application) => application.status === "admitted").length;
+  const selectedRejectedCount = selectedApplications.filter((application) => application.status === "rejected").length;
+  const admissionBlocked = selectedRejectedCount > 0;
+  const rejectionBlocked = selectedAdmittedCount > 0;
+  const selectionSummary = selectedCount
+    ? `${selectedUnderReviewCount} under review, ${selectedAdmittedCount} admitted, ${selectedRejectedCount} rejected`
+    : "No applicants selected";
   container.innerHTML = `
     <div class="panel">
       <div class="panel-toolbar">
@@ -720,12 +743,14 @@ function renderApplicationsAdmin() {
           <input id="application-select-all" type="checkbox" ${filtered.length && selectedVisibleCount === filtered.length ? "checked" : ""}>
           Select visible
         </label>
-        <span class="muted">${selectedCount} selected</span>
+        <span class="muted">${selectedCount} selected · ${escapeHtml(selectionSummary)}</span>
         <div class="row-actions">
-          <button type="button" data-batch-email="admitted" ${selectedCount ? "" : "disabled"}>Send admission</button>
-          <button class="danger" type="button" data-batch-email="rejected" ${selectedCount ? "" : "disabled"}>Send rejection</button>
+          <button type="button" data-batch-email="admitted" ${selectedCount && !admissionBlocked ? "" : "disabled"}>Send admission</button>
+          <button class="danger" type="button" data-batch-email="rejected" ${selectedCount && !rejectionBlocked ? "" : "disabled"}>Send rejection</button>
           <button type="button" data-clear-selection ${selectedCount ? "" : "disabled"}>Clear</button>
         </div>
+        ${admissionBlocked ? `<p class="mistake-guard">${selectedRejectedCount} selected applicant${selectedRejectedCount === 1 ? " is" : "s are"} already rejected. Remove rejected applicants from the selection before sending admission emails.</p>` : ""}
+        ${rejectionBlocked ? `<p class="mistake-guard">${selectedAdmittedCount} selected applicant${selectedAdmittedCount === 1 ? " is" : "s are"} already admitted. Remove admitted applicants from the selection before sending rejection emails.</p>` : ""}
       </div>
       <div class="application-list">
         ${filtered.map((application) => {
@@ -806,7 +831,19 @@ function renderApplicationsAdmin() {
     });
   });
   container.querySelectorAll("[data-application-status]").forEach((select) => {
-    select.addEventListener("change", () => updateApplicationStatus(select.dataset.applicationStatus, select.value));
+    select.addEventListener("change", () => {
+      const application = state.applications.find((item) => item.id === select.dataset.applicationStatus);
+      const reversingFinalDecision = (application?.status === "admitted" && select.value === "rejected") ||
+        (application?.status === "rejected" && select.value === "admitted");
+      if (reversingFinalDecision) {
+        const confirmed = window.confirm(`${application.full_name} is currently ${formatApplicationStatus(application.status)}. Mark this applicant as ${formatApplicationStatus(select.value)} anyway? This does not send an email.`);
+        if (!confirmed) {
+          select.value = application.status;
+          return;
+        }
+      }
+      updateApplicationStatus(select.dataset.applicationStatus, select.value);
+    });
   });
   container.querySelectorAll("[data-batch-email]").forEach((button) => {
     button.addEventListener("click", () => sendBatchDecisionEmails(button.dataset.batchEmail));
@@ -838,8 +875,35 @@ async function updateApplicationStatus(id, status) {
 async function sendBatchDecisionEmails(decision) {
   const ids = [...state.selectedApplicationIds];
   const label = formatApplicationStatus(decision);
-  const confirmed = window.confirm(`Send ${label.toLowerCase()} emails to ${ids.length} selected applicant${ids.length === 1 ? "" : "s"}? Successfully emailed applicants will be marked ${label}.`);
-  if (!confirmed) return;
+  const selectedApplications = state.applications.filter((application) => state.selectedApplicationIds.has(application.id));
+  const admittedSelections = selectedApplications.filter((application) => application.status === "admitted");
+  const rejectedSelections = selectedApplications.filter((application) => application.status === "rejected");
+
+  if (decision === "admitted" && rejectedSelections.length) {
+    state.applicationNotice = {
+      type: "error",
+      message: `Admission emails are blocked because ${rejectedSelections.length} selected applicant${rejectedSelections.length === 1 ? " is" : "s are"} already rejected. Clear rejected applicants from the selection first.`
+    };
+    renderApplicationsAdmin();
+    return;
+  }
+
+  if (decision === "rejected" && admittedSelections.length) {
+    state.applicationNotice = {
+      type: "error",
+      message: `Rejection emails are blocked because ${admittedSelections.length} selected applicant${admittedSelections.length === 1 ? " is" : "s are"} already admitted. Clear admitted applicants from the selection first.`
+    };
+    renderApplicationsAdmin();
+    return;
+  }
+
+  const confirmationWord = decision === "admitted" ? "ADMIT" : "REJECT";
+  const typed = window.prompt(`Type ${confirmationWord} to send ${label.toLowerCase()} emails to ${ids.length} selected applicant${ids.length === 1 ? "" : "s"}. Successfully emailed applicants will be marked ${label}.`);
+  if (typed !== confirmationWord) {
+    state.applicationNotice = { type: "error", message: `Batch ${label.toLowerCase()} email cancelled.` };
+    renderApplicationsAdmin();
+    return;
+  }
 
   state.applicationNotice = { type: "success", message: `Sending ${label.toLowerCase()} emails...` };
   renderApplicationsAdmin();
@@ -894,7 +958,7 @@ async function renderEmailAdmin() {
     state.smtpStatus = smtp;
     statusBox.className = `notice${smtp.configured ? "" : " error"}`;
     statusBox.innerHTML = smtp.configured
-      ? `<p>SMTP is configured for ${escapeHtml(smtp.username)} via ${escapeHtml(smtp.host)}:${escapeHtml(smtp.port)} using ${escapeHtml(smtp.secureTransport)}.</p>`
+      ? `<p>MXroute SMTP API is configured for ${escapeHtml(smtp.username)} on ${escapeHtml(smtp.server)}.</p>`
       : `<p>Missing SMTP secrets: ${smtp.missing.map(escapeHtml).join(", ")}.</p>`;
     const recipient = form.elements.to;
     if (!recipient.value && smtp.username) {
@@ -914,9 +978,10 @@ async function renderEmailAdmin() {
     try {
       const result = await request("/api/admin/email-test", {
         method: "POST",
-        body: JSON.stringify({ to })
+        body: JSON.stringify({ to }),
+        timeoutMs: 18000
       });
-      resultBox.innerHTML = `<p class="notice">Test email accepted by SMTP for ${escapeHtml(result.to)}.</p>`;
+      resultBox.innerHTML = `<p class="notice">Test email accepted by MXroute SMTP API for ${escapeHtml(result.to)}.</p>`;
     } catch (error) {
       resultBox.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
     } finally {
