@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS applications (
   resume_url TEXT NOT NULL DEFAULT '',
   work_authorization TEXT NOT NULL DEFAULT '',
   cover_letter TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewed', 'interview', 'rejected', 'hired')),
+  status TEXT NOT NULL DEFAULT 'under_review' CHECK (status IN ('under_review', 'admitted', 'rejected')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );

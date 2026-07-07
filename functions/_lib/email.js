@@ -185,3 +185,50 @@ export async function sendApplicationConfirmation(env, application, job, checkUr
 
   return { sent: true };
 }
+
+export async function sendApplicationDecisionEmail(env, application, job, decision) {
+  const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
+  const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
+  const roleTitle = job?.title || application.job_title || "the role";
+  const templates = {
+    admitted: {
+      subject: "Project Neura application update",
+      text: [
+        `Hi ${application.full_name},`,
+        "",
+        `Thank you for applying to ${roleTitle}. We are pleased to let you know that your application has been admitted to the next stage.`,
+        "",
+        "Project Neura staff will follow up with next steps shortly.",
+        "",
+        "Project Neura"
+      ].join("\n")
+    },
+    rejected: {
+      subject: "Project Neura application update",
+      text: [
+        `Hi ${application.full_name},`,
+        "",
+        `Thank you for applying to ${roleTitle}. After review, we will not be moving forward with your application for this role.`,
+        "",
+        "We appreciate the time and care you put into applying, and we wish you the best in your search.",
+        "",
+        "Project Neura"
+      ].join("\n")
+    }
+  };
+  const template = templates[decision];
+
+  if (!template) {
+    throw new Error("Invalid email decision");
+  }
+
+  await sendSmtp(env, {
+    from,
+    replyTo,
+    to: application.email,
+    subject: template.subject,
+    text: template.text
+  });
+
+  return { sent: true };
+}

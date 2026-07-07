@@ -5,6 +5,9 @@ const state = {
   adminJobs: [],
   applications: [],
   applicationJobId: "all",
+  applicationStatusFilter: "all",
+  selectedApplicationIds: new Set(),
+  applicationNotice: null,
   editingJobId: null,
   smtpStatus: null
 };
@@ -17,6 +20,12 @@ const defaultStandardFields = [
   { id: "resume_url", label: "Resume URL", type: "url", shown: true, required: false },
   { id: "work_authorization", label: "Work authorization", type: "text", shown: true, required: false },
   { id: "cover_letter", label: "Cover letter", type: "textarea", shown: true, required: true }
+];
+
+const applicationStatusOptions = [
+  { value: "under_review", label: "Under review" },
+  { value: "admitted", label: "Admitted" },
+  { value: "rejected", label: "Rejected" }
 ];
 
 const escapeHtml = (value = "") =>
@@ -37,6 +46,16 @@ const formatDate = (value) => {
     timeStyle: "short"
   }).format(new Date(value));
 };
+
+function formatApplicationStatus(value) {
+  return applicationStatusOptions.find((status) => status.value === value)?.label || "Under review";
+}
+
+function applicationStatusClass(value) {
+  if (value === "admitted") return "admitted";
+  if (value === "rejected") return "rejected";
+  return "under-review";
+}
 
 const request = async (url, options = {}) => {
   const response = await fetch(url, {
@@ -195,7 +214,7 @@ function renderApplicationDetails(application) {
           <h3>${escapeHtml(application.full_name)}</h3>
           <p>${escapeHtml(application.job_title || "Project Neura role")} • ${escapeHtml(formatDate(application.created_at))}</p>
         </div>
-        <span class="status-pill">${escapeHtml(application.status)}</span>
+        <span class="status-pill ${applicationStatusClass(application.status)}">${escapeHtml(formatApplicationStatus(application.status))}</span>
       </div>
       <div class="lookup-code" aria-label="Application code">${escapeHtml(application.lookup_code)}</div>
       <div class="inline-list">
@@ -396,6 +415,8 @@ async function loadAdminData() {
   ]);
   state.adminJobs = jobs;
   state.applications = applications;
+  const existingIds = new Set(applications.map((application) => application.id));
+  state.selectedApplicationIds = new Set([...state.selectedApplicationIds].filter((id) => existingIds.has(id)));
 }
 
 function renderAdminContent() {
@@ -664,20 +685,47 @@ async function deleteJob(id) {
 function renderApplicationsAdmin() {
   const container = app.querySelector("#admin-content");
   const jobsById = new Map(state.adminJobs.map((job) => [job.id, job]));
-  const filtered = state.applicationJobId === "all"
+  const byJob = state.applicationJobId === "all"
     ? state.applications
     : state.applications.filter((application) => application.job_id === state.applicationJobId);
+  const filtered = state.applicationStatusFilter === "all"
+    ? byJob
+    : byJob.filter((application) => application.status === state.applicationStatusFilter);
+  const selectedVisibleCount = filtered.filter((application) => state.selectedApplicationIds.has(application.id)).length;
+  const selectedCount = state.selectedApplicationIds.size;
   container.innerHTML = `
     <div class="panel">
       <div class="panel-toolbar">
         <h2>Applications</h2>
-        <label>
-          Filter by job
-          <select id="application-filter">
-            <option value="all">All jobs</option>
-            ${state.adminJobs.map((job) => `<option value="${escapeHtml(job.id)}" ${state.applicationJobId === job.id ? "selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}
-          </select>
+        <div class="application-filters">
+          <label>
+            Job
+            <select id="application-filter">
+              <option value="all">All jobs</option>
+              ${state.adminJobs.map((job) => `<option value="${escapeHtml(job.id)}" ${state.applicationJobId === job.id ? "selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="application-status-filter">
+              <option value="all">All statuses</option>
+              ${applicationStatusOptions.map((status) => `<option value="${status.value}" ${state.applicationStatusFilter === status.value ? "selected" : ""}>${status.label}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+      </div>
+      ${state.applicationNotice ? `<div class="notice ${state.applicationNotice.type === "error" ? "error" : ""}"><p>${escapeHtml(state.applicationNotice.message)}</p></div>` : ""}
+      <div class="bulk-bar">
+        <label class="checkbox-label">
+          <input id="application-select-all" type="checkbox" ${filtered.length && selectedVisibleCount === filtered.length ? "checked" : ""}>
+          Select visible
         </label>
+        <span class="muted">${selectedCount} selected</span>
+        <div class="row-actions">
+          <button type="button" data-batch-email="admitted" ${selectedCount ? "" : "disabled"}>Send admission</button>
+          <button class="danger" type="button" data-batch-email="rejected" ${selectedCount ? "" : "disabled"}>Send rejection</button>
+          <button type="button" data-clear-selection ${selectedCount ? "" : "disabled"}>Clear</button>
+        </div>
       </div>
       <div class="application-list">
         ${filtered.map((application) => {
@@ -689,7 +737,19 @@ function renderApplicationsAdmin() {
                   <h3>${escapeHtml(application.full_name)}</h3>
                   <p>${escapeHtml(job?.title || "Deleted job")} • ${escapeHtml(formatDate(application.created_at))}</p>
                 </div>
-                <span class="status-pill">${escapeHtml(application.status)}</span>
+                <div class="application-card-actions">
+                  <label class="checkbox-label">
+                    <input type="checkbox" data-application-select="${escapeHtml(application.id)}" ${state.selectedApplicationIds.has(application.id) ? "checked" : ""}>
+                    Select
+                  </label>
+                  <label>
+                    Status
+                    <select data-application-status="${escapeHtml(application.id)}">
+                      ${applicationStatusOptions.map((status) => `<option value="${status.value}" ${application.status === status.value ? "selected" : ""}>${status.label}</option>`).join("")}
+                    </select>
+                  </label>
+                  <span class="status-pill ${applicationStatusClass(application.status)}">${escapeHtml(formatApplicationStatus(application.status))}</span>
+                </div>
               </div>
               <div class="inline-list">
                 <span>${escapeHtml(application.email)}</span>
@@ -711,8 +771,97 @@ function renderApplicationsAdmin() {
   `;
   container.querySelector("#application-filter").addEventListener("change", (event) => {
     state.applicationJobId = event.target.value;
+    state.applicationNotice = null;
     renderApplicationsAdmin();
   });
+  container.querySelector("#application-status-filter").addEventListener("change", (event) => {
+    state.applicationStatusFilter = event.target.value;
+    state.applicationNotice = null;
+    renderApplicationsAdmin();
+  });
+  const selectAll = container.querySelector("#application-select-all");
+  if (selectAll) {
+    selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < filtered.length;
+    selectAll.addEventListener("change", () => {
+      filtered.forEach((application) => {
+        if (selectAll.checked) {
+          state.selectedApplicationIds.add(application.id);
+        } else {
+          state.selectedApplicationIds.delete(application.id);
+        }
+      });
+      state.applicationNotice = null;
+      renderApplicationsAdmin();
+    });
+  }
+  container.querySelectorAll("[data-application-select]").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        state.selectedApplicationIds.add(input.dataset.applicationSelect);
+      } else {
+        state.selectedApplicationIds.delete(input.dataset.applicationSelect);
+      }
+      state.applicationNotice = null;
+      renderApplicationsAdmin();
+    });
+  });
+  container.querySelectorAll("[data-application-status]").forEach((select) => {
+    select.addEventListener("change", () => updateApplicationStatus(select.dataset.applicationStatus, select.value));
+  });
+  container.querySelectorAll("[data-batch-email]").forEach((button) => {
+    button.addEventListener("click", () => sendBatchDecisionEmails(button.dataset.batchEmail));
+  });
+  container.querySelector("[data-clear-selection]")?.addEventListener("click", () => {
+    state.selectedApplicationIds.clear();
+    state.applicationNotice = null;
+    renderApplicationsAdmin();
+  });
+}
+
+async function updateApplicationStatus(id, status) {
+  try {
+    await request(`/api/admin/applications/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    const application = state.applications.find((item) => item.id === id);
+    if (application) {
+      application.status = status;
+    }
+    state.applicationNotice = { type: "success", message: `Marked applicant as ${formatApplicationStatus(status)}.` };
+  } catch (error) {
+    state.applicationNotice = { type: "error", message: error.message };
+  }
+  renderApplicationsAdmin();
+}
+
+async function sendBatchDecisionEmails(decision) {
+  const ids = [...state.selectedApplicationIds];
+  const label = formatApplicationStatus(decision);
+  const confirmed = window.confirm(`Send ${label.toLowerCase()} emails to ${ids.length} selected applicant${ids.length === 1 ? "" : "s"}? Successfully emailed applicants will be marked ${label}.`);
+  if (!confirmed) return;
+
+  state.applicationNotice = { type: "success", message: `Sending ${label.toLowerCase()} emails...` };
+  renderApplicationsAdmin();
+
+  try {
+    const result = await request("/api/admin/applications/batch-email", {
+      method: "POST",
+      body: JSON.stringify({ ids, decision })
+    });
+    const failedIds = new Set(result.failed.map((item) => item.id).filter(Boolean));
+    state.selectedApplicationIds = failedIds;
+    await loadAdminData();
+    const failedText = result.failed.length ? ` ${result.failed.length} failed and remain selected.` : "";
+    state.applicationNotice = {
+      type: result.failed.length ? "error" : "success",
+      message: `Sent ${result.sent.length} ${label.toLowerCase()} email${result.sent.length === 1 ? "" : "s"}.${failedText}`
+    };
+  } catch (error) {
+    state.applicationNotice = { type: "error", message: error.message };
+  }
+
+  renderApplicationsAdmin();
 }
 
 async function renderEmailAdmin() {

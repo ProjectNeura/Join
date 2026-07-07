@@ -356,6 +356,24 @@ button:disabled {
   background: rgba(179, 38, 30, 0.08);
 }
 
+.status-pill.admitted {
+  color: var(--success);
+  border-color: rgba(36, 138, 61, 0.16);
+  background: rgba(36, 138, 61, 0.08);
+}
+
+.status-pill.rejected {
+  color: var(--danger);
+  border-color: rgba(179, 38, 30, 0.16);
+  background: rgba(179, 38, 30, 0.08);
+}
+
+.status-pill.under-review {
+  color: #6f5d00;
+  border-color: rgba(155, 125, 0, 0.18);
+  background: rgba(155, 125, 0, 0.08);
+}
+
 .meta,
 .inline-list {
   display: flex;
@@ -692,6 +710,37 @@ td small {
 .application-list {
   display: grid;
   gap: 12px;
+}
+
+.application-filters,
+.application-card-actions,
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.application-filters label,
+.application-card-actions label {
+  min-width: 160px;
+}
+
+.application-card-actions {
+  justify-content: flex-end;
+}
+
+.application-card-actions .checkbox-label {
+  min-width: auto;
+}
+
+.bulk-bar {
+  justify-content: space-between;
+  margin: 14px 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .application-card {

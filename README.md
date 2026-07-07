@@ -7,6 +7,8 @@ A Cloudflare Pages application portal for Project Neura. It includes:
 - Public application check-back page at `/check`
 - Staff admin panel at `/admin`
 - Editable per-job application fields managed from the admin panel
+- Applicant status tracking with under review, admitted, and rejected states
+- Batch admission and rejection email sending from the admin panel
 - Cloudflare Pages Functions APIs
 - Cloudflare D1 storage for jobs and applications
 
