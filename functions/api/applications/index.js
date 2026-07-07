@@ -14,6 +14,18 @@ export async function onRequestPost({ request, env, waitUntil }) {
       return error("This job is no longer accepting applications", 404);
     }
 
+    const email = required(body.email, "Email");
+    const existingApplication = await db.prepare(`
+      SELECT lookup_code
+      FROM applications
+      WHERE job_id = ? AND lower(trim(email)) = lower(trim(?))
+      LIMIT 1
+    `).bind(job.id, email).first();
+
+    if (existingApplication) {
+      return error("This email address has already submitted an application for this job. Use your check-back code to view or withdraw the existing application before submitting again.", 409);
+    }
+
     const standardFields = normalizeStandardFields(job.standard_fields);
     const formFields = normalizeFormFields(job.form_fields);
     const standardValues = Object.fromEntries(standardFields.map((field) => [
@@ -44,7 +56,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       id: crypto.randomUUID(),
       job_id: job.id,
       full_name: required(body.full_name, "Full name"),
-      email: required(body.email, "Email"),
+      email,
       phone: standardValues.phone,
       location: standardValues.location,
       portfolio_url: standardValues.portfolio_url,
@@ -94,6 +106,9 @@ export async function onRequestPost({ request, env, waitUntil }) {
       }
     }, { status: 201 });
   } catch (errorValue) {
+    if (errorValue instanceof Error && errorValue.message.includes("idx_applications_job_email_unique")) {
+      return error("This email address has already submitted an application for this job. Use your check-back code to view or withdraw the existing application before submitting again.", 409);
+    }
     return workerError(errorValue);
   }
 }

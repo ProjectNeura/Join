@@ -556,6 +556,23 @@ textarea {
   padding: clamp(20px, 3vw, 28px);
 }
 
+.withdraw-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  border: 1px solid rgba(179, 38, 30, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(179, 38, 30, 0.05);
+}
+
+.withdraw-box p {
+  margin: 3px 0 0;
+}
+
 .answer-list {
   display: grid;
   gap: 10px;

@@ -34,3 +34,4 @@ CREATE TABLE IF NOT EXISTS applications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_applications_job_created ON applications(job_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_applications_job_email_unique ON applications(job_id, lower(trim(email)));

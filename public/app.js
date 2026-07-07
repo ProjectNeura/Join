@@ -221,6 +221,15 @@ function renderError(error) {
 }
 
 function renderApplicationDetails(application) {
+  const withdrawMarkup = application.can_withdraw ? `
+    <div class="withdraw-box">
+      <div>
+        <strong>Withdraw this application</strong>
+        <p class="muted">This job is still open, so you can withdraw and submit a new application for the same role.</p>
+      </div>
+      <button class="danger" type="button" data-withdraw-application="${escapeHtml(application.lookup_code)}">Withdraw application</button>
+    </div>
+  ` : "";
   return `
     <article class="application-card retrieved-application">
       <div class="panel-toolbar">
@@ -245,6 +254,7 @@ function renderApplicationDetails(application) {
       ${application.work_authorization ? `<p><strong>Work authorization:</strong> ${escapeHtml(application.work_authorization)}</p>` : ""}
       ${renderCustomAnswers(application.custom_answers)}
       <p class="prose">${nl2br(application.cover_letter)}</p>
+      ${withdrawMarkup}
     </article>
   `;
 }
@@ -387,12 +397,35 @@ function renderCheck() {
     try {
       const { application } = await request(`/api/applications/${encodeURIComponent(code)}`);
       result.innerHTML = renderApplicationDetails(application);
+      result.querySelector("[data-withdraw-application]")?.addEventListener("click", () => withdrawApplication(application, result, notice));
     } catch (error) {
       notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
     } finally {
       button.disabled = false;
     }
   });
+}
+
+async function withdrawApplication(application, result, notice) {
+  const confirmed = window.confirm("Withdraw this application? This deletes the submitted application and frees this email address to apply for the same open job again.");
+  if (!confirmed) return;
+
+  const button = result.querySelector("[data-withdraw-application]");
+  button.disabled = true;
+  notice.innerHTML = "";
+  try {
+    await request(`/api/applications/${encodeURIComponent(application.lookup_code)}`, { method: "DELETE" });
+    result.innerHTML = `
+      <div class="notice">
+        <strong>Application withdrawn.</strong>
+        <p>You can submit a new application while the job post remains open.</p>
+        ${application.job_slug ? `<a class="button ghost" href="/jobs/${escapeHtml(application.job_slug)}" data-link>Apply again</a>` : ""}
+      </div>
+    `;
+  } catch (error) {
+    notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    button.disabled = false;
+  }
 }
 
 async function renderAdmin() {

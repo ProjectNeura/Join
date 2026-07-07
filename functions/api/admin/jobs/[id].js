@@ -67,11 +67,15 @@ export async function onRequestPatch({ request, env, params }) {
 export async function onRequestDelete({ env, params }) {
   try {
     const db = requireDb(env);
+    const applicationDelete = await db.prepare("DELETE FROM applications WHERE job_id = ?").bind(params.id).run();
     const result = await db.prepare("DELETE FROM jobs WHERE id = ?").bind(params.id).run();
     if (!result.meta.changes) {
       return error("Job post not found", 404);
     }
-    return json({ ok: true });
+    return json({
+      ok: true,
+      deleted_applications: applicationDelete.meta?.changes || 0
+    });
   } catch (errorValue) {
     return workerError(errorValue);
   }

@@ -27,6 +27,7 @@ export async function onRequestGet({ env, params }) {
         applications.created_at,
         jobs.title AS job_title,
         jobs.slug AS job_slug,
+        jobs.status AS job_status,
         jobs.team AS job_team,
         jobs.location AS job_location,
         jobs.employment_type AS job_employment_type
@@ -44,8 +45,41 @@ export async function onRequestGet({ env, params }) {
     } catch {
       application.custom_answers = [];
     }
+    application.can_withdraw = application.job_status === "open";
 
     return json({ application });
+  } catch (errorValue) {
+    return workerError(errorValue);
+  }
+}
+
+export async function onRequestDelete({ env, params }) {
+  try {
+    const db = requireDb(env);
+    const lookupCode = normalizeLookupCode(params.code);
+
+    if (!lookupCode) {
+      return error("Application code is required", 422);
+    }
+
+    const application = await db.prepare(`
+      SELECT applications.id, jobs.status AS job_status
+      FROM applications
+      LEFT JOIN jobs ON jobs.id = applications.job_id
+      WHERE applications.lookup_code = ?
+    `).bind(lookupCode).first();
+
+    if (!application) {
+      return error("No application found for that code", 404);
+    }
+
+    if (application.job_status !== "open") {
+      return error("This application can only be withdrawn while the job post is still open.", 409);
+    }
+
+    await db.prepare("DELETE FROM applications WHERE id = ?").bind(application.id).run();
+
+    return json({ ok: true });
   } catch (errorValue) {
     return workerError(errorValue);
   }
