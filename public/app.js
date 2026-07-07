@@ -9,7 +9,8 @@ const state = {
   selectedApplicationIds: new Set(),
   applicationNotice: null,
   editingJobId: null,
-  smtpStatus: null
+  emailTemplates: [],
+  emailTemplateVariables: []
 };
 
 const defaultStandardFields = [
@@ -934,60 +935,86 @@ async function renderEmailAdmin() {
     <div class="panel">
       <div class="panel-toolbar">
         <div>
-          <h2>Email delivery</h2>
-          <p class="muted">Send a test message through the configured SMTP account.</p>
+          <h2>Email templates</h2>
+          <p class="muted">Subject and body templates used for applicant messages.</p>
         </div>
       </div>
-      <div id="email-status" class="notice"><p>Checking SMTP settings...</p></div>
-      <form id="email-test-form" class="form-grid">
-        <label class="full">Test recipient <input name="to" type="email" placeholder="name@example.com" required></label>
-        <div class="form-actions full">
-          <button class="primary" type="submit">Send test email</button>
-        </div>
-      </form>
-      <div id="email-test-result"></div>
+      <div id="email-template-notice"></div>
+      <div id="email-templates">Loading templates...</div>
     </div>
   `;
 
-  const statusBox = container.querySelector("#email-status");
-  const resultBox = container.querySelector("#email-test-result");
-  const form = container.querySelector("#email-test-form");
+  const templateNotice = container.querySelector("#email-template-notice");
+  const templatesContainer = container.querySelector("#email-templates");
 
   try {
-    const { smtp } = await request("/api/admin/email-test");
-    state.smtpStatus = smtp;
-    statusBox.className = `notice${smtp.configured ? "" : " error"}`;
-    statusBox.innerHTML = smtp.configured
-      ? `<p>MXroute SMTP API is configured for ${escapeHtml(smtp.username)} on ${escapeHtml(smtp.server)}.</p>`
-      : `<p>Missing SMTP secrets: ${smtp.missing.map(escapeHtml).join(", ")}.</p>`;
-    const recipient = form.elements.to;
-    if (!recipient.value && smtp.username) {
-      recipient.value = smtp.username;
-    }
-  } catch (error) {
-    statusBox.className = "notice error";
-    statusBox.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
-  }
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const button = form.querySelector("button");
-    const to = new FormData(form).get("to");
-    button.disabled = true;
-    resultBox.innerHTML = `<p class="notice">Sending test email...</p>`;
-    try {
-      const result = await request("/api/admin/email-test", {
-        method: "POST",
-        body: JSON.stringify({ to }),
-        timeoutMs: 18000
+    const { templates, variables } = await request("/api/admin/email-templates");
+    state.emailTemplates = templates;
+    state.emailTemplateVariables = variables;
+    templatesContainer.innerHTML = renderEmailTemplatesEditor(templates, variables);
+    templatesContainer.querySelectorAll("[data-template-form]").forEach((templateForm) => {
+      templateForm.addEventListener("submit", (event) => saveEmailTemplate(event, templateNotice));
+    });
+    templatesContainer.querySelectorAll("[data-template-defaults]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const template = state.emailTemplates.find((item) => item.key === button.dataset.templateDefaults);
+        const templateForm = button.closest("form");
+        if (!template) return;
+        templateForm.elements.subject.value = template.default_subject;
+        templateForm.elements.body.value = template.default_body;
       });
-      resultBox.innerHTML = `<p class="notice">Test email accepted by MXroute SMTP API for ${escapeHtml(result.to)}.</p>`;
-    } catch (error) {
-      resultBox.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
-    } finally {
-      button.disabled = false;
-    }
-  });
+    });
+  } catch (error) {
+    templatesContainer.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderEmailTemplatesEditor(templates, variables) {
+  const variableChips = variables.map((variable) => `<code>{{${escapeHtml(variable)}}}</code>`).join("");
+  return `
+    <div class="variable-strip" aria-label="Available template fields">${variableChips}</div>
+    <div class="template-list">
+      ${templates.map((template) => `
+        <form class="template-editor" data-template-form="${escapeHtml(template.key)}">
+          <div class="panel-toolbar">
+            <h3>${escapeHtml(template.label)}</h3>
+            <button class="ghost" type="button" data-template-defaults="${escapeHtml(template.key)}">Restore default</button>
+          </div>
+          <label>Subject <input name="subject" value="${escapeHtml(template.subject)}" required maxlength="200"></label>
+          <label>Body <textarea name="body" required>${escapeHtml(template.body)}</textarea></label>
+          <input type="hidden" name="key" value="${escapeHtml(template.key)}">
+          <div class="form-actions">
+            <button class="primary" type="submit">Save template</button>
+          </div>
+        </form>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function saveEmailTemplate(event, notice) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const payload = {
+    key: form.elements.key.value,
+    subject: form.elements.subject.value,
+    body: form.elements.body.value
+  };
+  button.disabled = true;
+  notice.innerHTML = "";
+  try {
+    const { templates } = await request("/api/admin/email-templates", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    state.emailTemplates = templates;
+    notice.innerHTML = `<p class="notice">Template saved.</p>`;
+  } catch (error) {
+    notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function render() {

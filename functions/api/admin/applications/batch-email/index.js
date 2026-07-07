@@ -25,7 +25,11 @@ export async function onRequestPost({ request, env }) {
 
     const placeholders = ids.map(() => "?").join(", ");
     const { results } = await db.prepare(`
-      SELECT applications.*, jobs.title AS job_title
+      SELECT
+        applications.*,
+        jobs.title AS job_title,
+        jobs.location AS job_location,
+        jobs.employment_type AS job_employment_type
       FROM applications
       LEFT JOIN jobs ON jobs.id = applications.job_id
       WHERE applications.id IN (${placeholders})
@@ -53,7 +57,11 @@ export async function onRequestPost({ request, env }) {
 
     for (const application of results) {
       try {
-        await sendApplicationDecisionEmail(env, application, { title: application.job_title }, decision);
+        await sendApplicationDecisionEmail(env, db, application, {
+          title: application.job_title,
+          location: application.job_location,
+          employment_type: application.job_employment_type
+        }, decision);
         await db.prepare("UPDATE applications SET status = ? WHERE id = ?")
           .bind(decision, application.id)
           .run();

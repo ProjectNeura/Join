@@ -6,7 +6,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     const db = requireDb(env);
     const body = await readJson(request);
     const jobSlug = required(body.job_slug, "Job");
-    const job = await db.prepare("SELECT id, title, standard_fields, form_fields FROM jobs WHERE slug = ? AND status = 'open'")
+    const job = await db.prepare("SELECT id, title, location, employment_type, standard_fields, form_fields FROM jobs WHERE slug = ? AND status = 'open'")
       .bind(jobSlug)
       .first();
 
@@ -79,7 +79,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     ).run();
 
     const checkUrl = new URL("/check", request.url).toString();
-    const emailTask = sendApplicationConfirmation(env, application, job, checkUrl)
+    const emailTask = sendApplicationConfirmation(env, db, application, job, checkUrl)
       .catch((emailError) => console.warn("Application confirmation email failed", emailError));
     if (typeof waitUntil === "function") {
       waitUntil(emailTask);

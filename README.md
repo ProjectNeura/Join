@@ -9,6 +9,7 @@ A Cloudflare Pages application portal for Project Neura. It includes:
 - Editable per-job application fields managed from the admin panel
 - Applicant status tracking with under review, admitted, and rejected states
 - Batch admission and rejection email sending from the admin panel
+- Editable email templates with dynamic fields such as `{{job_title}}`
 - Cloudflare Pages Functions APIs
 - Cloudflare D1 storage for jobs and applications
 
@@ -89,4 +90,6 @@ In Cloudflare Pages, add these under Settings > Variables and Secrets and encryp
 
 Email is sent through the MXroute SMTP API at `https://smtpapi.mxroute.com/`, using `SMTP_HOST` as the MXroute server hostname. You can override the API endpoint with `SMTP_API_URL` if MXroute changes it.
 
-After setting or changing Pages secrets, redeploy the project so the Functions runtime receives the new values. The admin panel includes an Email tab that sends a test message through the same SMTP path used by application confirmations.
+After setting or changing Pages secrets, redeploy the project so the Functions runtime receives the new values.
+
+The Email tab also includes editable templates for confirmation, admission, and rejection emails. Supported dynamic fields include `{{full_name}}`, `{{email}}`, `{{job_title}}`, `{{job_location}}`, `{{job_employment_type}}`, `{{lookup_code}}`, and `{{check_url}}`.

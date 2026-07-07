@@ -1,6 +1,66 @@
 const defaultSmtpApiUrl = "https://smtpapi.mxroute.com/";
 const defaultSmtpTimeoutMs = 12000;
 
+export const emailTemplateVariables = [
+  "full_name",
+  "email",
+  "job_title",
+  "job_location",
+  "job_employment_type",
+  "lookup_code",
+  "check_url"
+];
+
+export const defaultEmailTemplates = {
+  confirmation: {
+    key: "confirmation",
+    label: "Application confirmation",
+    subject: "Project Neura application received",
+    body: [
+      "Hi {{full_name}},",
+      "",
+      "Thanks for applying to {{job_title}}. We received your application.",
+      "",
+      "Your private check-back code is: {{lookup_code}}",
+      "You can retrieve your submitted application here: {{check_url}}",
+      "",
+      "Keep this code somewhere safe. Project Neura staff will review your application and follow up if there is a fit.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  },
+  admitted: {
+    key: "admitted",
+    label: "Admission",
+    subject: "Project Neura application update",
+    body: [
+      "Hi {{full_name}},",
+      "",
+      "Thank you for applying to {{job_title}}. We are pleased to let you know that your application has been admitted to the next stage.",
+      "",
+      "Project Neura staff will follow up with next steps shortly.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  },
+  rejected: {
+    key: "rejected",
+    label: "Rejection",
+    subject: "Project Neura application update",
+    body: [
+      "Hi {{full_name}},",
+      "",
+      "Thank you for applying to {{job_title}}. After review, we will not be moving forward with your application for this role.",
+      "",
+      "We appreciate the time and care you put into applying, and we wish you the best in your search.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  }
+};
+
+export const emailTemplateKeys = Object.keys(defaultEmailTemplates);
+
 function getSmtpTimeoutMs(env) {
   const value = Number(env.SMTP_TIMEOUT_MS || defaultSmtpTimeoutMs);
   return Number.isFinite(value) && value >= 1000 ? value : defaultSmtpTimeoutMs;
@@ -41,6 +101,61 @@ function escapeHtml(value) {
 
 function textToHtml(value) {
   return escapeHtml(value).replace(/\r?\n/g, "<br>");
+}
+
+function normalizeTemplateRow(row) {
+  const fallback = defaultEmailTemplates[row.key];
+  return {
+    key: row.key,
+    label: fallback.label,
+    subject: String(row.subject || fallback.subject),
+    body: String(row.body || fallback.body),
+    default_subject: fallback.subject,
+    default_body: fallback.body
+  };
+}
+
+export async function getEmailTemplates(db) {
+  const defaults = emailTemplateKeys.map((key) => normalizeTemplateRow(defaultEmailTemplates[key]));
+  if (!db) return defaults;
+
+  try {
+    const { results } = await db.prepare("SELECT key, subject, body FROM email_templates").all();
+    const saved = new Map(results.map((row) => [row.key, row]));
+    return emailTemplateKeys.map((key) => normalizeTemplateRow({
+      key,
+      subject: saved.get(key)?.subject || defaultEmailTemplates[key].subject,
+      body: saved.get(key)?.body || defaultEmailTemplates[key].body
+    }));
+  } catch {
+    return defaults;
+  }
+}
+
+export async function getEmailTemplate(db, key) {
+  const templates = await getEmailTemplates(db);
+  return templates.find((template) => template.key === key) || normalizeTemplateRow(defaultEmailTemplates[key]);
+}
+
+function createTemplateContext(application, job = {}, extras = {}) {
+  return {
+    full_name: application.full_name || "",
+    email: application.email || "",
+    job_title: job.title || application.job_title || "the role",
+    job_location: job.location || application.job_location || "",
+    job_employment_type: job.employment_type || application.job_employment_type || "",
+    lookup_code: application.lookup_code || "",
+    check_url: extras.checkUrl || extras.check_url || ""
+  };
+}
+
+export function renderEmailTemplate(value, context) {
+  return String(value || "").replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_, name) => {
+    if (Object.prototype.hasOwnProperty.call(context, name)) {
+      return context[name];
+    }
+    return "";
+  });
 }
 
 export async function sendSmtp(env, message) {
@@ -90,80 +205,43 @@ export async function sendSmtp(env, message) {
   return result;
 }
 
-export async function sendApplicationConfirmation(env, application, job, checkUrl) {
+export async function sendApplicationConfirmation(env, db, application, job, checkUrl) {
   if (!hasSmtpConfig(env)) {
     return { skipped: true, reason: "missing_smtp_config" };
   }
 
   const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
   const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
-  const subject = "Project Neura application received";
-  const text = [
-    `Hi ${application.full_name},`,
-    "",
-    `Thanks for applying to ${job.title}. We received your application.`,
-    "",
-    `Your private check-back code is: ${application.lookup_code}`,
-    `You can retrieve your submitted application here: ${checkUrl}`,
-    "",
-    "Keep this code somewhere safe. Project Neura staff will review your application and follow up if there is a fit.",
-    "",
-    "Project Neura"
-  ].join("\n");
+  const template = await getEmailTemplate(db, "confirmation");
+  const context = createTemplateContext(application, job, { checkUrl });
 
   await sendSmtp(env, {
     from,
     replyTo,
     to: application.email,
-    subject,
-    text
+    subject: renderEmailTemplate(template.subject, context),
+    text: renderEmailTemplate(template.body, context)
   });
 
   return { sent: true };
 }
 
-export async function sendApplicationDecisionEmail(env, application, job, decision) {
+export async function sendApplicationDecisionEmail(env, db, application, job, decision) {
   const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
   const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
-  const roleTitle = job?.title || application.job_title || "the role";
-  const templates = {
-    admitted: {
-      subject: "Project Neura application update",
-      text: [
-        `Hi ${application.full_name},`,
-        "",
-        `Thank you for applying to ${roleTitle}. We are pleased to let you know that your application has been admitted to the next stage.`,
-        "",
-        "Project Neura staff will follow up with next steps shortly.",
-        "",
-        "Project Neura"
-      ].join("\n")
-    },
-    rejected: {
-      subject: "Project Neura application update",
-      text: [
-        `Hi ${application.full_name},`,
-        "",
-        `Thank you for applying to ${roleTitle}. After review, we will not be moving forward with your application for this role.`,
-        "",
-        "We appreciate the time and care you put into applying, and we wish you the best in your search.",
-        "",
-        "Project Neura"
-      ].join("\n")
-    }
-  };
-  const template = templates[decision];
+  const template = defaultEmailTemplates[decision] ? await getEmailTemplate(db, decision) : null;
 
   if (!template) {
     throw new Error("Invalid email decision");
   }
+  const context = createTemplateContext(application, job);
 
   await sendSmtp(env, {
     from,
     replyTo,
     to: application.email,
-    subject: template.subject,
-    text: template.text
+    subject: renderEmailTemplate(template.subject, context),
+    text: renderEmailTemplate(template.body, context)
   });
 
   return { sent: true };

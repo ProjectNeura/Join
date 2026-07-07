@@ -764,6 +764,41 @@ td small {
   margin: 7px 0;
 }
 
+.variable-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.variable-strip code {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--accent);
+  background: rgba(0, 113, 227, 0.08);
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.template-list {
+  display: grid;
+  gap: 14px;
+}
+
+.template-editor {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.template-editor textarea {
+  min-height: 220px;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
 .empty,
 .loading {
   border: 1px dashed rgba(0, 0, 0, 0.16);
