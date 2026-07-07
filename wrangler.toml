@@ -1,9 +1,9 @@
-name = "project-neura-portal"
+name = "project-neura-join"
 compatibility_date = "2026-05-03"
 pages_build_output_dir = "public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "project-neura-portal"
-database_id = "replace-with-your-d1-database-id"
+database_name = "project-neura-join"
+database_id = "27e0e450-9054-40a9-84d7-9c450999b036"
 migrations_dir = "migrations"
