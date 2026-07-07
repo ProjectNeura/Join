@@ -329,6 +329,58 @@ button:disabled {
   font-size: 1rem;
 }
 
+.summary > :first-child {
+  margin-top: 0;
+}
+
+.summary > :last-child {
+  margin-bottom: 0;
+}
+
+.summary p,
+.summary ul,
+.summary ol {
+  margin: 0 0 10px;
+}
+
+.summary ul,
+.summary ol {
+  padding-left: 1.15rem;
+}
+
+.summary li + li {
+  margin-top: 4px;
+}
+
+.summary h3,
+.summary h4,
+.summary h5,
+.summary h6 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.summary a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.summary a:hover {
+  text-decoration: underline;
+}
+
+.summary code {
+  border-radius: 5px;
+  padding: 0.05rem 0.25rem;
+  background: rgba(0, 0, 0, 0.04);
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
 .eyebrow,
 .status-pill {
   margin: 0;

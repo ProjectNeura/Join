@@ -410,7 +410,7 @@ async function renderHome() {
     const card = template.content.cloneNode(true);
     card.querySelector(".eyebrow").textContent = job.team || "Project Neura";
     card.querySelector("h2").textContent = job.title;
-    card.querySelector(".summary").textContent = job.summary;
+    card.querySelector(".summary").innerHTML = renderMarkdown(job.summary);
     card.querySelector(".meta").innerHTML = metaHtml(job);
     const apply = card.querySelector(".button");
     apply.href = `/jobs/${job.slug}`;
@@ -743,9 +743,9 @@ function renderJobsAdmin() {
           <label>Location <input name="location" value="${escapeHtml(editingJob?.location || "")}" placeholder="Remote, Toronto, hybrid"></label>
           <label>Employment type <input name="employment_type" value="${escapeHtml(editingJob?.employment_type || "Full-time")}"></label>
           <label>Salary range <input name="salary" value="${escapeHtml(editingJob?.salary || "")}" placeholder="Optional"></label>
-          <label class="full">Summary <textarea name="summary" required>${escapeHtml(editingJob?.summary || "")}</textarea></label>
-          <label class="full">Description <textarea name="description" required>${escapeHtml(editingJob?.description || "")}</textarea></label>
-          <label class="full">Requirements <textarea name="requirements">${escapeHtml(editingJob?.requirements || "")}</textarea></label>
+          <label class="full">Summary <span class="field-hint">Markdown supported on the job card.</span><textarea name="summary" required>${escapeHtml(editingJob?.summary || "")}</textarea></label>
+          <label class="full">Description <span class="field-hint">Markdown supported on the job post.</span><textarea name="description" required>${escapeHtml(editingJob?.description || "")}</textarea></label>
+          <label class="full">Requirements <span class="field-hint">Markdown supported on the job post.</span><textarea name="requirements">${escapeHtml(editingJob?.requirements || "")}</textarea></label>
           <label>Status
             <select name="status">
               ${["draft", "open", "closed"].map((status) => `<option value="${status}" ${(editingJob?.status || "draft") === status ? "selected" : ""}>${status[0].toUpperCase()}${status.slice(1)}</option>`).join("")}

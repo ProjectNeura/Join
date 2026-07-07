@@ -32,7 +32,7 @@ export const APP_HTML = `<!doctype html>
         <div>
           <p class="eyebrow"></p>
           <h2></h2>
-          <p class="summary"></p>
+          <div class="summary"></div>
           <div class="meta"></div>
         </div>
         <a class="button primary" data-link>Apply</a>
