@@ -657,30 +657,41 @@ textarea {
 }
 
 .field-row label:nth-child(1) {
-  grid-column: span 3;
+  grid-column: 1 / span 4;
+  grid-row: 1;
 }
 
 .field-row label:nth-child(2) {
-  grid-column: span 2;
+  grid-column: 5 / span 2;
+  grid-row: 1;
 }
 
 .field-row label:nth-child(3) {
-  grid-column: span 3;
+  grid-column: 1 / span 6;
+  grid-row: 2;
 }
 
 .field-row label:nth-child(4) {
-  grid-column: span 4;
+  grid-column: 7 / span 6;
+  grid-row: 2;
 }
 
 .field-required {
-  grid-column: span 2;
+  grid-column: 7 / span 3;
+  grid-row: 1;
+  align-self: end;
+  justify-content: flex-start;
+  min-width: 0;
+  padding-inline: 0;
 }
 
 .field-remove {
-  grid-column: span 2;
+  grid-column: 10 / span 3;
+  grid-row: 1;
+  justify-self: end;
   min-width: 0;
-  width: 100%;
-  padding-inline: 10px;
+  width: auto;
+  padding-inline: 18px;
 }
 
 .field-hint {
@@ -929,6 +940,12 @@ td small {
     grid-template-columns: 1fr;
   }
 
+  .standard-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
   .field-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -940,9 +957,11 @@ td small {
   .field-required,
   .field-remove {
     grid-column: span 2;
+    grid-row: auto;
   }
 
-  .standard-field-row {
-    grid-template-columns: 1fr;
+  .field-remove {
+    justify-self: stretch;
+    width: 100%;
   }
 }
