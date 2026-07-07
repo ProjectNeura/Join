@@ -109,10 +109,11 @@ export function normalizeStandardFields(value) {
   const overrides = new Map(readJsonArray(value).map((field) => [field?.id, field]));
   return defaultStandardFields.map((field) => {
     const override = overrides.get(field.id);
+    const shown = override?.shown !== undefined ? Boolean(override.shown) : field.shown;
     return {
       ...field,
-      shown: override?.shown !== undefined ? Boolean(override.shown) : field.shown,
-      required: override?.required !== undefined ? Boolean(override.required) : field.required
+      shown,
+      required: shown && (override?.required !== undefined ? Boolean(override.required) : field.required)
     };
   });
 }

@@ -822,6 +822,10 @@ function renderJobsAdmin() {
   container.querySelectorAll("[data-field-remove]").forEach((button) => {
     button.addEventListener("click", () => button.closest(".field-row").remove());
   });
+  container.querySelectorAll(".standard-field-row").forEach((row) => {
+    syncStandardFieldRequiredState(row);
+    row.querySelector('[name="standard_shown"]').addEventListener("change", () => syncStandardFieldRequiredState(row));
+  });
   container.querySelectorAll("[data-job-edit]").forEach((button) => {
     button.addEventListener("click", () => editJob(button.dataset.jobEdit));
   });
@@ -861,6 +865,7 @@ function renderFieldBuilderRow(field = {}) {
 }
 
 function renderStandardFieldRow(field) {
+  const required = field.shown && field.required;
   return `
     <div class="standard-field-row">
       <div>
@@ -868,9 +873,18 @@ function renderStandardFieldRow(field) {
         <p class="muted">${escapeHtml(field.type)}</p>
       </div>
       <label class="checkbox-label"><input name="standard_shown" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.shown ? "checked" : ""}> Show</label>
-      <label class="checkbox-label"><input name="standard_required" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.required ? "checked" : ""}> Required</label>
+      <label class="checkbox-label"><input name="standard_required" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${required ? "checked" : ""} ${field.shown ? "" : "disabled"}> Required</label>
     </div>
   `;
+}
+
+function syncStandardFieldRequiredState(row) {
+  const shownInput = row.querySelector('[name="standard_shown"]');
+  const requiredInput = row.querySelector('[name="standard_required"]');
+  requiredInput.disabled = !shownInput.checked;
+  if (!shownInput.checked) {
+    requiredInput.checked = false;
+  }
 }
 
 function addFieldBuilderRow() {
@@ -897,7 +911,7 @@ function collectJobPayload(form) {
     return {
       id: shownInput.dataset.standardId,
       shown: shownInput.checked,
-      required: requiredInput.checked
+      required: shownInput.checked && requiredInput.checked
     };
   });
   const formFields = [...form.querySelectorAll(".field-row")]
