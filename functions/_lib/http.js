@@ -139,6 +139,21 @@ export async function uniqueSlug(db, title) {
 
 const codeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+function generateCode(length = 16) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => codeAlphabet[byte % codeAlphabet.length]).join("");
+}
+
+export async function uniqueJobCode(db) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = generateCode(16);
+    const existing = await db.prepare("SELECT id FROM jobs WHERE id = ? OR slug = ?").bind(code, code).first();
+    if (!existing) return code;
+  }
+  throw new Error("Could not create a job code");
+}
+
 function formatLookupCode(rawCode) {
   const clean = rawCode.replace(/^PN/, "").slice(0, 16);
   const groups = clean.match(/.{1,4}/g) || [];
@@ -152,10 +167,7 @@ export function normalizeLookupCode(value) {
 }
 
 function generateLookupCode() {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const raw = Array.from(bytes, (byte) => codeAlphabet[byte % codeAlphabet.length]).join("");
-  return formatLookupCode(raw);
+  return formatLookupCode(generateCode(16));
 }
 
 export async function uniqueLookupCode(db) {

@@ -1,4 +1,4 @@
-import { json, normalizeFormFields, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueSlug, workerError } from "../../../_lib/http.js";
+import { json, normalizeFormFields, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueJobCode, workerError } from "../../../_lib/http.js";
 
 const allowedStatuses = new Set(["draft", "open", "closed"]);
 
@@ -28,11 +28,11 @@ export async function onRequestPost({ request, env }) {
     const body = await readJson(request);
     const title = required(body.title, "Title");
     const status = allowedStatuses.has(body.status) ? body.status : "draft";
-    const slug = await uniqueSlug(db, title);
+    const code = await uniqueJobCode(db);
     const job = {
-      id: crypto.randomUUID(),
+      id: code,
       title,
-      slug,
+      slug: code,
       team: normalizeText(body.team),
       location: normalizeText(body.location),
       employment_type: normalizeText(body.employment_type) || "Full-time",

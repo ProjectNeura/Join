@@ -40,6 +40,128 @@ const escapeHtml = (value = "") =>
 
 const nl2br = (value = "") => escapeHtml(value).replace(/\n/g, "<br>");
 
+function safeHref(value = "") {
+  const text = String(value || "").trim();
+  try {
+    const url = new URL(text, window.location.origin);
+    if (["http:", "https:", "mailto:"].includes(url.protocol)) {
+      return escapeHtml(url.href);
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function renderMarkdownInline(value = "") {
+  const tokens = [];
+  const token = (html) => {
+    const key = `\u0000${tokens.length}\u0000`;
+    tokens.push(html);
+    return key;
+  };
+
+  let text = String(value || "").replace(/`([^`\n]+)`/g, (_, code) => token(`<code>${escapeHtml(code)}</code>`));
+  text = text.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, label, href) => {
+    const safeUrl = safeHref(href);
+    if (!safeUrl) return escapeHtml(label);
+    return token(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${renderMarkdownInline(label)}</a>`);
+  });
+
+  let html = escapeHtml(text)
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_\n]+)_/g, "<em>$1</em>");
+
+  tokens.forEach((htmlValue, index) => {
+    html = html.replaceAll(`\u0000${index}\u0000`, htmlValue);
+  });
+  return html;
+}
+
+function renderMarkdown(value = "") {
+  const lines = String(value || "").replace(/\r\n?/g, "\n").split("\n");
+  const blocks = [];
+  let paragraph = [];
+  let list = null;
+  let codeFence = null;
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push(`<p>${renderMarkdownInline(paragraph.join(" "))}</p>`);
+    paragraph = [];
+  };
+
+  const flushList = () => {
+    if (!list) return;
+    blocks.push(`<${list.type}>${list.items.map((item) => `<li>${renderMarkdownInline(item)}</li>`).join("")}</${list.type}>`);
+    list = null;
+  };
+
+  const flushCodeFence = () => {
+    if (!codeFence) return;
+    blocks.push(`<pre><code>${escapeHtml(codeFence.lines.join("\n"))}</code></pre>`);
+    codeFence = null;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (codeFence) {
+      if (trimmed.startsWith("```")) {
+        flushCodeFence();
+      } else {
+        codeFence.lines.push(line);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      flushParagraph();
+      flushList();
+      codeFence = { lines: [] };
+      continue;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      const level = Math.min(6, heading[1].length + 2);
+      blocks.push(`<h${level}>${renderMarkdownInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const unordered = trimmed.match(/^[-*+]\s+(.+)$/);
+    const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      flushParagraph();
+      const type = unordered ? "ul" : "ol";
+      if (!list || list.type !== type) {
+        flushList();
+        list = { type, items: [] };
+      }
+      list.items.push((unordered || ordered)[1]);
+      continue;
+    }
+
+    flushList();
+    paragraph.push(trimmed);
+  }
+
+  flushParagraph();
+  flushList();
+  flushCodeFence();
+  return blocks.join("");
+}
+
 const formatDate = (value) => {
   if (!value) return "";
   return new Intl.DateTimeFormat(undefined, {
@@ -309,8 +431,8 @@ async function renderJob(slug) {
         <h1>${escapeHtml(job.title)}</h1>
         <div class="meta">${metaHtml(job)}</div>
         <h2>About the role</h2>
-        <div class="prose">${nl2br(job.description || job.summary)}</div>
-        ${job.requirements ? `<h2>What we are looking for</h2><div class="prose">${nl2br(job.requirements)}</div>` : ""}
+        <div class="prose">${renderMarkdown(job.description || job.summary)}</div>
+        ${job.requirements ? `<h2>What we are looking for</h2><div class="prose">${renderMarkdown(job.requirements)}</div>` : ""}
       </div>
       <form class="panel" id="application-form">
         <h2>Apply for this role</h2>
