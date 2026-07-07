@@ -1,0 +1,15 @@
+{
+  "name": "project-neura-portal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public --local",
+    "deploy": "wrangler pages deploy public --project-name project-neura-portal",
+    "db:migrate:local": "wrangler d1 migrations apply project-neura-portal --local",
+    "db:migrate:remote": "wrangler d1 migrations apply project-neura-portal --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

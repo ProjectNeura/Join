@@ -1,0 +1,9 @@
+name = "project-neura-portal"
+compatibility_date = "2026-05-03"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "project-neura-portal"
+database_id = "replace-with-your-d1-database-id"
+migrations_dir = "migrations"

@@ -1,0 +1,1 @@
+ALTER TABLE jobs ADD COLUMN standard_fields TEXT NOT NULL DEFAULT '[]';

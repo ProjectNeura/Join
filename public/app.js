@@ -1,0 +1,740 @@
+const app = document.querySelector("#app");
+
+const state = {
+  adminTab: "jobs",
+  adminJobs: [],
+  applications: [],
+  applicationJobId: "all",
+  editingJobId: null
+};
+
+const defaultStandardFields = [
+  { id: "phone", label: "Phone", type: "text", shown: true, required: false },
+  { id: "location", label: "Location", type: "text", shown: true, required: false },
+  { id: "portfolio_url", label: "Portfolio URL", type: "url", shown: true, required: false },
+  { id: "linkedin_url", label: "LinkedIn URL", type: "url", shown: true, required: false },
+  { id: "resume_url", label: "Resume URL", type: "url", shown: true, required: false },
+  { id: "work_authorization", label: "Work authorization", type: "text", shown: true, required: false },
+  { id: "cover_letter", label: "Cover letter", type: "textarea", shown: true, required: true }
+];
+
+const escapeHtml = (value = "") =>
+  String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+
+const nl2br = (value = "") => escapeHtml(value).replace(/\n/g, "<br>");
+
+const formatDate = (value) => {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+};
+
+const request = async (url, options = {}) => {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed");
+  }
+  return payload;
+};
+
+const setActiveNav = () => {
+  document.querySelectorAll(".nav a").forEach((link) => {
+    const active = link.getAttribute("href") === location.pathname ||
+      (link.getAttribute("href") === "/" && location.pathname.startsWith("/jobs/")) ||
+      (link.getAttribute("href") === "/check" && location.pathname.startsWith("/check")) ||
+      (link.getAttribute("href") === "/admin" && location.pathname.startsWith("/admin"));
+    if (active) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+};
+
+const navigate = (path) => {
+  history.pushState({}, "", path);
+  render();
+};
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-link]");
+  if (!link || link.origin && link.origin !== location.origin) return;
+  event.preventDefault();
+  navigate(link.getAttribute("href"));
+});
+
+window.addEventListener("popstate", render);
+
+function metaHtml(job) {
+  return [job.location, job.employment_type, job.salary]
+    .filter(Boolean)
+    .map((item) => `<span>${escapeHtml(item)}</span>`)
+    .join("");
+}
+
+function parseArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function fieldInputName(id) {
+  return `custom_${id}`;
+}
+
+function renderCustomApplicationFields(fields) {
+  return parseArray(fields).map((field) => {
+    const required = field.required ? "required" : "";
+    const label = `${escapeHtml(field.label)}${field.required ? " *" : ""}`;
+    const name = fieldInputName(field.id);
+
+    if (field.type === "textarea") {
+      return `<label class="full">${label}<textarea name="${escapeHtml(name)}" ${required}></textarea></label>`;
+    }
+
+    if (field.type === "url") {
+      return `<label class="full">${label}<input name="${escapeHtml(name)}" type="url" inputmode="url" ${required}></label>`;
+    }
+
+    if (field.type === "select") {
+      const options = parseArray(field.options);
+      return `
+        <label class="full">${label}
+          <select name="${escapeHtml(name)}" ${required}>
+            <option value="">Select an option</option>
+            ${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </label>
+      `;
+    }
+
+    return `<label class="full">${label}<input name="${escapeHtml(name)}" ${required}></label>`;
+  }).join("");
+}
+
+function renderStandardApplicationFields(fields) {
+  return parseArray(fields).filter((field) => field.shown).map((field) => {
+    const required = field.required ? "required" : "";
+    const label = `${escapeHtml(field.label)}${field.required ? " *" : ""}`;
+
+    if (field.type === "textarea") {
+      return `<label class="full">${label}<textarea name="${escapeHtml(field.id)}" ${required}></textarea></label>`;
+    }
+
+    if (field.type === "url") {
+      const placeholder = field.id === "resume_url" ? ' placeholder="Link to PDF, Drive, or portfolio profile"' : "";
+      return `<label class="full">${label}<input name="${escapeHtml(field.id)}" type="url" inputmode="url"${placeholder} ${required}></label>`;
+    }
+
+    return `<label>${label}<input name="${escapeHtml(field.id)}" ${required}></label>`;
+  }).join("");
+}
+
+function collectCustomAnswers(form, fields) {
+  const data = new FormData(form);
+  return Object.fromEntries(parseArray(fields).map((field) => [
+    field.id,
+    data.get(fieldInputName(field.id)) || ""
+  ]));
+}
+
+function renderCustomAnswers(answers) {
+  const rows = parseArray(answers).filter((answer) => answer.value);
+  if (!rows.length) return "";
+  return `
+    <div class="answer-list">
+      ${rows.map((answer) => `
+        <div class="answer-row">
+          <strong>${escapeHtml(answer.label)}</strong>
+          <p>${nl2br(answer.value)}</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderLoading(label = "Loading") {
+  app.innerHTML = `<div class="page"><div class="loading">${label}</div></div>`;
+}
+
+function renderError(error) {
+  app.innerHTML = `
+    <div class="page">
+      <div class="notice error">${escapeHtml(error.message || error)}</div>
+    </div>
+  `;
+}
+
+function renderApplicationDetails(application) {
+  return `
+    <article class="application-card retrieved-application">
+      <div class="panel-toolbar">
+        <div>
+          <p class="eyebrow">Application found</p>
+          <h3>${escapeHtml(application.full_name)}</h3>
+          <p>${escapeHtml(application.job_title || "Project Neura role")} • ${escapeHtml(formatDate(application.created_at))}</p>
+        </div>
+        <span class="status-pill">${escapeHtml(application.status)}</span>
+      </div>
+      <div class="lookup-code" aria-label="Application code">${escapeHtml(application.lookup_code)}</div>
+      <div class="inline-list">
+        <span>${escapeHtml(application.email)}</span>
+        ${application.phone ? `<span>${escapeHtml(application.phone)}</span>` : ""}
+        ${application.location ? `<span>${escapeHtml(application.location)}</span>` : ""}
+        ${application.job_location ? `<span>${escapeHtml(application.job_location)}</span>` : ""}
+        ${application.job_employment_type ? `<span>${escapeHtml(application.job_employment_type)}</span>` : ""}
+      </div>
+      ${application.resume_url ? `<p><strong>Resume:</strong> <a href="${escapeHtml(application.resume_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.resume_url)}</a></p>` : ""}
+      ${application.portfolio_url ? `<p><strong>Portfolio:</strong> <a href="${escapeHtml(application.portfolio_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.portfolio_url)}</a></p>` : ""}
+      ${application.linkedin_url ? `<p><strong>LinkedIn:</strong> <a href="${escapeHtml(application.linkedin_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.linkedin_url)}</a></p>` : ""}
+      ${application.work_authorization ? `<p><strong>Work authorization:</strong> ${escapeHtml(application.work_authorization)}</p>` : ""}
+      ${renderCustomAnswers(application.custom_answers)}
+      <p class="prose">${nl2br(application.cover_letter)}</p>
+    </article>
+  `;
+}
+
+async function renderHome() {
+  renderLoading("Loading open roles");
+  const { jobs } = await request("/api/jobs");
+  app.innerHTML = `
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Careers at Project Neura</p>
+        <h1>Work on intelligence that feels effortless.</h1>
+        <p>Join the team designing precise, useful systems for the next generation of applied AI.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#open-roles">See open roles</a>
+          <a class="button" href="/check" data-link>Check an application</a>
+        </div>
+      </div>
+      <div class="hero-art" role="img" aria-label="Abstract neural network visual"></div>
+    </section>
+    <section class="jobs-grid" id="open-roles" aria-label="Open roles"></section>
+  `;
+  const grid = app.querySelector(".jobs-grid");
+  if (!jobs.length) {
+    grid.innerHTML = '<div class="empty">No open roles are posted yet.</div>';
+    return;
+  }
+  const template = document.querySelector("#job-card-template");
+  for (const job of jobs) {
+    const card = template.content.cloneNode(true);
+    card.querySelector(".eyebrow").textContent = job.team || "Project Neura";
+    card.querySelector("h2").textContent = job.title;
+    card.querySelector(".summary").textContent = job.summary;
+    card.querySelector(".meta").innerHTML = metaHtml(job);
+    const apply = card.querySelector(".button");
+    apply.href = `/jobs/${job.slug}`;
+    apply.setAttribute("aria-label", `Apply for ${job.title}`);
+    grid.appendChild(card);
+  }
+}
+
+async function renderJob(slug) {
+  renderLoading("Loading role");
+  const { job } = await request(`/api/jobs/${encodeURIComponent(slug)}`);
+  const standardFields = parseArray(job.standard_fields);
+  const formFields = parseArray(job.form_fields);
+  app.innerHTML = `
+    <section class="page job-detail">
+      <div class="panel">
+        <p class="eyebrow">${escapeHtml(job.team || "Project Neura")}</p>
+        <h1>${escapeHtml(job.title)}</h1>
+        <div class="meta">${metaHtml(job)}</div>
+        <h2>About the role</h2>
+        <div class="prose">${nl2br(job.description || job.summary)}</div>
+        ${job.requirements ? `<h2>What we are looking for</h2><div class="prose">${nl2br(job.requirements)}</div>` : ""}
+      </div>
+      <form class="panel" id="application-form">
+        <h2>Apply for this role</h2>
+        <div id="form-notice"></div>
+        <div class="form-grid">
+          <label>Full name <input name="full_name" autocomplete="name" required></label>
+          <label>Email <input name="email" type="email" autocomplete="email" required></label>
+          ${renderStandardApplicationFields(standardFields)}
+          ${renderCustomApplicationFields(formFields)}
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">Submit application</button>
+          <a class="button ghost" href="/" data-link>Back to jobs</a>
+        </div>
+      </form>
+    </section>
+  `;
+  app.querySelector("#application-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const notice = form.querySelector("#form-notice");
+    const button = form.querySelector("button[type='submit']");
+    const payload = Object.fromEntries(new FormData(form).entries());
+    button.disabled = true;
+    notice.innerHTML = "";
+    try {
+      const { application } = await request("/api/applications", {
+        method: "POST",
+        body: JSON.stringify({
+          ...payload,
+          job_slug: job.slug,
+          custom_answers: collectCustomAnswers(form, formFields)
+        })
+      });
+      form.reset();
+      notice.innerHTML = `
+        <div class="notice">
+          <strong>Application received.</strong>
+          <p>Save this private check-back code. We will also email it to you when email delivery is configured.</p>
+          <div class="lookup-code">${escapeHtml(application.lookup_code)}</div>
+          <a class="button ghost" href="/check" data-link>Check this application later</a>
+        </div>
+      `;
+    } catch (error) {
+      notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function renderCheck() {
+  app.innerHTML = `
+    <section class="page check-page">
+      <div class="page-head">
+        <p class="eyebrow">Application check-back</p>
+        <h1>Retrieve your submitted application.</h1>
+        <p>Enter the private code you received after submitting. The code is the key to viewing your application, so keep it somewhere safe.</p>
+      </div>
+      <div class="check-layout">
+        <form class="panel" id="check-form">
+          <h2>Enter your code</h2>
+          <div id="check-notice"></div>
+          <label class="full">Application code <input name="lookup_code" autocomplete="off" placeholder="PN-XXXX-XXXX-XXXX-XXXX" required></label>
+          <div class="form-actions">
+            <button class="primary" type="submit">Retrieve application</button>
+            <a class="button ghost" href="/" data-link>Back to jobs</a>
+          </div>
+        </form>
+        <div id="check-result" class="check-result"></div>
+      </div>
+    </section>
+  `;
+
+  app.querySelector("#check-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const notice = form.querySelector("#check-notice");
+    const result = app.querySelector("#check-result");
+    const button = form.querySelector("button[type='submit']");
+    const code = new FormData(form).get("lookup_code");
+    notice.innerHTML = "";
+    result.innerHTML = "";
+    button.disabled = true;
+    try {
+      const { application } = await request(`/api/applications/${encodeURIComponent(code)}`);
+      result.innerHTML = renderApplicationDetails(application);
+    } catch (error) {
+      notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+async function renderAdmin() {
+  renderLoading("Loading admin panel");
+  await loadAdminData();
+  app.innerHTML = `
+    <section class="admin-layout">
+      <div class="page-head">
+        <p class="eyebrow">Staff area</p>
+        <h1>Admin panel</h1>
+      </div>
+      <div class="toolbar">
+        <div class="admin-tabs" role="group" aria-label="Admin sections">
+          <button type="button" data-admin-tab="jobs" aria-pressed="${state.adminTab === "jobs"}">Jobs</button>
+          <button type="button" data-admin-tab="applications" aria-pressed="${state.adminTab === "applications"}">Applications</button>
+        </div>
+      </div>
+      <div id="admin-content"></div>
+    </section>
+  `;
+  app.querySelectorAll("[data-admin-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.adminTab = button.dataset.adminTab;
+      renderAdmin();
+    });
+  });
+  renderAdminContent();
+}
+
+async function loadAdminData() {
+  const [{ jobs }, { applications }] = await Promise.all([
+    request("/api/admin/jobs"),
+    request("/api/admin/applications")
+  ]);
+  state.adminJobs = jobs;
+  state.applications = applications;
+}
+
+function renderAdminContent() {
+  if (state.adminTab === "applications") {
+    renderApplicationsAdmin();
+  } else {
+    renderJobsAdmin();
+  }
+}
+
+function renderJobsAdmin() {
+  const container = app.querySelector("#admin-content");
+  const editingJob = state.adminJobs.find((job) => job.id === state.editingJobId);
+  const standardFields = editingJob ? parseArray(editingJob.standard_fields) : defaultStandardFields;
+  const fields = parseArray(editingJob?.form_fields);
+  container.innerHTML = `
+    <div class="admin-grid">
+      <form class="panel" id="job-form">
+        <div class="panel-toolbar">
+          <h2>${editingJob ? "Edit job post" : "Create job post"}</h2>
+          ${editingJob ? '<button class="ghost" type="button" data-job-cancel-edit>Cancel</button>' : ""}
+        </div>
+        <div id="job-form-notice"></div>
+        <div class="form-grid">
+          <label class="full">Title <input name="title" value="${escapeHtml(editingJob?.title || "")}" required></label>
+          <label>Team <input name="team" value="${escapeHtml(editingJob?.team || "")}" placeholder="Research"></label>
+          <label>Location <input name="location" value="${escapeHtml(editingJob?.location || "")}" placeholder="Remote, Toronto, hybrid"></label>
+          <label>Employment type <input name="employment_type" value="${escapeHtml(editingJob?.employment_type || "Full-time")}"></label>
+          <label>Salary range <input name="salary" value="${escapeHtml(editingJob?.salary || "")}" placeholder="Optional"></label>
+          <label class="full">Summary <textarea name="summary" required>${escapeHtml(editingJob?.summary || "")}</textarea></label>
+          <label class="full">Description <textarea name="description" required>${escapeHtml(editingJob?.description || "")}</textarea></label>
+          <label class="full">Requirements <textarea name="requirements">${escapeHtml(editingJob?.requirements || "")}</textarea></label>
+          <label>Status
+            <select name="status">
+              ${["draft", "open", "closed"].map((status) => `<option value="${status}" ${(editingJob?.status || "draft") === status ? "selected" : ""}>${status[0].toUpperCase()}${status.slice(1)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="field-builder">
+          <div class="panel-toolbar">
+            <div>
+              <h3>Built-in fields</h3>
+              <p class="muted">Full name and email are always collected. Remove or require the other standard fields for this role.</p>
+            </div>
+          </div>
+          <div class="standard-field-list">
+            ${standardFields.map((field) => renderStandardFieldRow(field)).join("")}
+          </div>
+          <div class="panel-toolbar">
+            <div>
+              <h3>Custom fields</h3>
+              <p class="muted">Add role-specific questions to the applicant form.</p>
+            </div>
+            <button type="button" data-field-add>Add field</button>
+          </div>
+          <div class="field-list" id="field-list">
+            ${fields.map((field) => renderFieldBuilderRow(field)).join("")}
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">${editingJob ? "Save changes" : "Create post"}</button>
+        </div>
+      </form>
+      <div class="panel">
+        <div class="panel-toolbar">
+          <h2>Job posts</h2>
+          <span class="status-pill">${state.adminJobs.length} total</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Location</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${state.adminJobs.map((job) => `
+                <tr>
+                  <td><strong>${escapeHtml(job.title)}</strong><br><small>${escapeHtml(job.team || "Project Neura")}</small></td>
+                  <td><span class="status-pill ${job.status === "closed" ? "closed" : ""}">${escapeHtml(job.status)}</span></td>
+                  <td>${escapeHtml(job.location)}</td>
+                  <td>${escapeHtml(formatDate(job.created_at))}</td>
+                  <td>
+                    <div class="row-actions">
+                      <button type="button" data-job-edit="${job.id}">Edit</button>
+                      ${job.status !== "open" ? `<button type="button" data-job-status="${job.id}" data-status="open">Open</button>` : ""}
+                      ${job.status !== "closed" ? `<button type="button" data-job-status="${job.id}" data-status="closed">Close</button>` : ""}
+                      ${job.status !== "draft" ? `<button type="button" data-job-status="${job.id}" data-status="draft">Draft</button>` : ""}
+                      <button class="danger" type="button" data-job-delete="${job.id}">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("") || '<tr><td colspan="5">No jobs yet.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  container.querySelector("#job-form").addEventListener("submit", handleSaveJob);
+  container.querySelector("[data-field-add]").addEventListener("click", addFieldBuilderRow);
+  container.querySelectorAll("[data-field-remove]").forEach((button) => {
+    button.addEventListener("click", () => button.closest(".field-row").remove());
+  });
+  container.querySelectorAll("[data-job-edit]").forEach((button) => {
+    button.addEventListener("click", () => editJob(button.dataset.jobEdit));
+  });
+  container.querySelector("[data-job-cancel-edit]")?.addEventListener("click", () => {
+    state.editingJobId = null;
+    renderJobsAdmin();
+  });
+  container.querySelectorAll("[data-job-status]").forEach((button) => {
+    button.addEventListener("click", () => updateJobStatus(button.dataset.jobStatus, button.dataset.status));
+  });
+  container.querySelectorAll("[data-job-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteJob(button.dataset.jobDelete));
+  });
+}
+
+function renderFieldBuilderRow(field = {}) {
+  const id = field.id || "";
+  const label = field.label || "";
+  const type = field.type || "text";
+  const options = parseArray(field.options).join(", ");
+  return `
+    <div class="field-row">
+      <label>Label <input name="field_label" value="${escapeHtml(label)}" placeholder="Question"></label>
+      <label>Type
+        <select name="field_type">
+          ${["text", "textarea", "url", "select"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${item}</option>`).join("")}
+        </select>
+      </label>
+      <label>Options <input name="field_options" value="${escapeHtml(options)}" placeholder="For select: Option A, Option B"></label>
+      <label class="checkbox-label"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
+      <input name="field_id" type="hidden" value="${escapeHtml(id)}">
+      <button class="danger" type="button" data-field-remove>Remove</button>
+    </div>
+  `;
+}
+
+function renderStandardFieldRow(field) {
+  return `
+    <div class="standard-field-row">
+      <div>
+        <strong>${escapeHtml(field.label)}</strong>
+        <p class="muted">${escapeHtml(field.type)}</p>
+      </div>
+      <label class="checkbox-label"><input name="standard_shown" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.shown ? "checked" : ""}> Show</label>
+      <label class="checkbox-label"><input name="standard_required" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.required ? "checked" : ""}> Required</label>
+    </div>
+  `;
+}
+
+function addFieldBuilderRow() {
+  const list = app.querySelector("#field-list");
+  list.insertAdjacentHTML("beforeend", renderFieldBuilderRow());
+  list.querySelector(".field-row:last-child [data-field-remove]").addEventListener("click", (event) => {
+    event.currentTarget.closest(".field-row").remove();
+  });
+}
+
+function slugifyFieldId(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+}
+
+function collectJobPayload(form) {
+  const data = new FormData(form);
+  const standardFields = [...form.querySelectorAll(".standard-field-row")].map((row) => {
+    const shownInput = row.querySelector('[name="standard_shown"]');
+    const requiredInput = row.querySelector('[name="standard_required"]');
+    return {
+      id: shownInput.dataset.standardId,
+      shown: shownInput.checked,
+      required: requiredInput.checked
+    };
+  });
+  const formFields = [...form.querySelectorAll(".field-row")]
+    .map((row, index) => {
+      const label = row.querySelector('[name="field_label"]').value.trim();
+      if (!label) return null;
+      const type = row.querySelector('[name="field_type"]').value;
+      const id = row.querySelector('[name="field_id"]').value || slugifyFieldId(label) || `field_${index + 1}`;
+      const options = row.querySelector('[name="field_options"]').value
+        .split(",")
+        .map((option) => option.trim())
+        .filter(Boolean);
+      return {
+        id,
+        label,
+        type,
+        required: row.querySelector('[name="field_required"]').checked,
+        options
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    title: data.get("title"),
+    team: data.get("team"),
+    location: data.get("location"),
+    employment_type: data.get("employment_type"),
+    salary: data.get("salary"),
+    summary: data.get("summary"),
+    description: data.get("description"),
+    requirements: data.get("requirements"),
+    status: data.get("status"),
+    standard_fields: standardFields,
+    form_fields: formFields
+  };
+}
+
+async function handleSaveJob(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const notice = form.querySelector("#job-form-notice");
+  const payload = collectJobPayload(form);
+  const editingId = state.editingJobId;
+  try {
+    await request(editingId ? `/api/admin/jobs/${encodeURIComponent(editingId)}` : "/api/admin/jobs", {
+      method: editingId ? "PATCH" : "POST",
+      body: JSON.stringify(payload)
+    });
+    form.reset();
+    state.editingJobId = null;
+    notice.innerHTML = `<p class="notice">Job post ${editingId ? "updated" : "created"}.</p>`;
+    await loadAdminData();
+    renderJobsAdmin();
+  } catch (error) {
+    notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function editJob(id) {
+  state.editingJobId = id;
+  renderJobsAdmin();
+  app.querySelector("#job-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function updateJobStatus(id, status) {
+  await request(`/api/admin/jobs/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  await loadAdminData();
+  renderJobsAdmin();
+}
+
+async function deleteJob(id) {
+  const confirmed = window.confirm("Delete this job post and its applications?");
+  if (!confirmed) return;
+  await request(`/api/admin/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await loadAdminData();
+  renderJobsAdmin();
+}
+
+function renderApplicationsAdmin() {
+  const container = app.querySelector("#admin-content");
+  const jobsById = new Map(state.adminJobs.map((job) => [job.id, job]));
+  const filtered = state.applicationJobId === "all"
+    ? state.applications
+    : state.applications.filter((application) => application.job_id === state.applicationJobId);
+  container.innerHTML = `
+    <div class="panel">
+      <div class="panel-toolbar">
+        <h2>Applications</h2>
+        <label>
+          Filter by job
+          <select id="application-filter">
+            <option value="all">All jobs</option>
+            ${state.adminJobs.map((job) => `<option value="${escapeHtml(job.id)}" ${state.applicationJobId === job.id ? "selected" : ""}>${escapeHtml(job.title)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="application-list">
+        ${filtered.map((application) => {
+          const job = jobsById.get(application.job_id);
+          return `
+            <article class="application-card">
+              <div class="panel-toolbar">
+                <div>
+                  <h3>${escapeHtml(application.full_name)}</h3>
+                  <p>${escapeHtml(job?.title || "Deleted job")} • ${escapeHtml(formatDate(application.created_at))}</p>
+                </div>
+                <span class="status-pill">${escapeHtml(application.status)}</span>
+              </div>
+              <div class="inline-list">
+                <span>${escapeHtml(application.email)}</span>
+                ${application.phone ? `<span>${escapeHtml(application.phone)}</span>` : ""}
+                ${application.location ? `<span>${escapeHtml(application.location)}</span>` : ""}
+              </div>
+              ${application.lookup_code ? `<div class="lookup-code">${escapeHtml(application.lookup_code)}</div>` : ""}
+              ${application.resume_url ? `<p><strong>Resume:</strong> <a href="${escapeHtml(application.resume_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.resume_url)}</a></p>` : ""}
+              ${application.portfolio_url ? `<p><strong>Portfolio:</strong> <a href="${escapeHtml(application.portfolio_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.portfolio_url)}</a></p>` : ""}
+              ${application.linkedin_url ? `<p><strong>LinkedIn:</strong> <a href="${escapeHtml(application.linkedin_url)}" target="_blank" rel="noreferrer">${escapeHtml(application.linkedin_url)}</a></p>` : ""}
+              ${application.work_authorization ? `<p><strong>Work authorization:</strong> ${escapeHtml(application.work_authorization)}</p>` : ""}
+              ${renderCustomAnswers(application.custom_answers)}
+              <p class="prose">${nl2br(application.cover_letter)}</p>
+            </article>
+          `;
+        }).join("") || '<div class="empty">No applications yet.</div>'}
+      </div>
+    </div>
+  `;
+  container.querySelector("#application-filter").addEventListener("change", (event) => {
+    state.applicationJobId = event.target.value;
+    renderApplicationsAdmin();
+  });
+}
+
+async function render() {
+  setActiveNav();
+  app.focus({ preventScroll: true });
+  const path = location.pathname.replace(/\/+$/, "") || "/";
+  try {
+    if (path === "/") {
+      await renderHome();
+    } else if (path.startsWith("/jobs/")) {
+      await renderJob(decodeURIComponent(path.split("/").pop()));
+    } else if (path === "/check") {
+      renderCheck();
+    } else if (path === "/admin") {
+      await renderAdmin();
+    } else {
+      app.innerHTML = `
+        <section class="page">
+          <div class="empty">Page not found. <a href="/" data-link>Return to jobs</a>.</div>
+        </section>
+      `;
+    }
+  } catch (error) {
+    renderError(error);
+  }
+  setActiveNav();
+}
+
+render();
