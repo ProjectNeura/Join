@@ -5,7 +5,7 @@ export const APP_HTML = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Project Neura Careers</title>
     <meta name="description" content="Project Neura application portal">
-    <link rel="icon" href="https://raw.githubusercontent.com/ProjectNeura/ProjectNeura/5ea0c73a40ad560e179c152ff3660d03924ef6e1/img/logo.png">
+    <link rel="icon" href="https://cds.projectneura.org/logo.svg">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -13,7 +13,7 @@ export const APP_HTML = `<!doctype html>
       <header class="topbar">
         <a class="brand" href="/" data-link>
           <span class="brand-mark" aria-hidden="true">
-            <img src="https://raw.githubusercontent.com/ProjectNeura/ProjectNeura/5ea0c73a40ad560e179c152ff3660d03924ef6e1/img/logo.png" alt="">
+            <img src="https://cds.projectneura.org/logo.svg" alt="">
           </span>
           <span>
             <strong>Project Neura</strong>
