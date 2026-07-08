@@ -13,6 +13,13 @@ const statusLabels = {
   rejected: "rejected"
 };
 
+function emailAlreadySent(application, decision) {
+  if (decision === "invited") {
+    return Boolean(application.invitation_sent_at);
+  }
+  return application.decision_sent_status === decision && Boolean(application.decision_sent_at);
+}
+
 function normalizeIds(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((id) => String(id || "").trim()).filter(Boolean))].slice(0, 100);
@@ -52,6 +59,12 @@ export async function onRequestPost({ request, env }) {
       return error(`${decisionLabels[decision]} emails are blocked because ${mismatchedSelections.length} selected applicant${mismatchedSelections.length === 1 ? " is" : "s are"} not marked ${statusLabels[decision]}.`, 409);
     }
 
+    const alreadySentSelections = results.filter((application) => emailAlreadySent(application, decision));
+
+    if (alreadySentSelections.length) {
+      return error(`${decisionLabels[decision]} emails are blocked because ${alreadySentSelections.length} selected applicant${alreadySentSelections.length === 1 ? " has" : "s have"} already been sent this email.`, 409);
+    }
+
     const smtp = getSmtpStatus(env);
     if (!smtp.configured) {
       return error(`Missing SMTP configuration: ${smtp.missing.join(", ")}`, 422);
@@ -67,6 +80,15 @@ export async function onRequestPost({ request, env }) {
           location: application.job_location,
           employment_type: application.job_employment_type
         }, decision);
+        if (decision === "invited") {
+          await db.prepare("UPDATE applications SET invitation_sent_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(application.id)
+            .run();
+        } else {
+          await db.prepare("UPDATE applications SET decision_sent_at = CURRENT_TIMESTAMP, decision_sent_status = ? WHERE id = ?")
+            .bind(decision, application.id)
+            .run();
+        }
         sent.push({
           id: application.id,
           full_name: application.full_name,

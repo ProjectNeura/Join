@@ -105,6 +105,22 @@ export function normalizeApplicationStatus(value) {
   return applicationStatuses.includes(value) ? value : "under_review";
 }
 
+export function publicApplicationStatus(application) {
+  if (
+    ["admitted", "rejected"].includes(application?.status) &&
+    application?.decision_sent_status === application.status &&
+    application?.decision_sent_at
+  ) {
+    return application.status;
+  }
+
+  if (application?.invitation_sent_at) {
+    return "invited";
+  }
+
+  return "under_review";
+}
+
 export function normalizeStandardFields(value) {
   const submittedFields = readJsonArray(value);
   const overrides = new Map(submittedFields.map((field) => [field?.id, field]));

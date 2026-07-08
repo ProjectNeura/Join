@@ -1,4 +1,4 @@
-import { error, json, normalizeText, readJson, requireDb, required, workerError } from "../../../_lib/http.js";
+import { error, json, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../../_lib/http.js";
 
 function normalizeEmail(value) {
   return required(value, "Email").toLowerCase();
@@ -39,6 +39,9 @@ export async function onRequestPost({ request, env }) {
         applications.lookup_code,
         applications.created_at,
         applications.status,
+        applications.invitation_sent_at,
+        applications.decision_sent_at,
+        applications.decision_sent_status,
         jobs.title AS job_title,
         jobs.slug AS job_slug,
         jobs.status AS job_status,
@@ -57,7 +60,7 @@ export async function onRequestPost({ request, env }) {
       applications: results.map((application) => ({
         lookup_code: application.lookup_code,
         created_at: application.created_at,
-        status: application.status,
+        status: publicApplicationStatus(application),
         job_title: application.job_title || "Deleted job post",
         job_slug: application.job_slug,
         job_status: application.job_status,

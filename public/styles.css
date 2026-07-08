@@ -432,6 +432,12 @@ button:disabled {
   background: rgba(155, 125, 0, 0.08);
 }
 
+.status-pill.email-sent {
+  color: #515154;
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .meta,
 .inline-list {
   display: flex;

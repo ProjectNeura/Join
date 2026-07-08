@@ -1,4 +1,4 @@
-import { error, json, normalizeLookupCode, requireDb, workerError } from "../../_lib/http.js";
+import { error, json, normalizeLookupCode, publicApplicationStatus, requireDb, workerError } from "../../_lib/http.js";
 
 export async function onRequestGet({ env, params }) {
   try {
@@ -24,6 +24,9 @@ export async function onRequestGet({ env, params }) {
         applications.cover_letter,
         applications.custom_answers,
         applications.status,
+        applications.invitation_sent_at,
+        applications.decision_sent_at,
+        applications.decision_sent_status,
         applications.created_at,
         jobs.title AS job_title,
         jobs.slug AS job_slug,
@@ -46,6 +49,10 @@ export async function onRequestGet({ env, params }) {
       application.custom_answers = [];
     }
     application.can_withdraw = application.job_status === "open";
+    application.status = publicApplicationStatus(application);
+    delete application.invitation_sent_at;
+    delete application.decision_sent_at;
+    delete application.decision_sent_status;
 
     return json({ application });
   } catch (errorValue) {

@@ -6,6 +6,7 @@ const state = {
   applications: [],
   applicationJobId: "all",
   applicationStatusFilter: "all",
+  applicationEmailFilter: "all",
   selectedApplicationIds: new Set(),
   applicationNotice: null,
   editingJobId: null,
@@ -28,6 +29,14 @@ const applicationStatusOptions = [
   { value: "invited", label: "Invited" },
   { value: "admitted", label: "Admitted" },
   { value: "rejected", label: "Rejected" }
+];
+
+const applicationEmailFilterOptions = [
+  { value: "all", label: "All email states" },
+  { value: "invitation_sent", label: "Invitation sent" },
+  { value: "invitation_unsent", label: "Invitation not sent" },
+  { value: "decision_sent", label: "Decision sent" },
+  { value: "decision_unsent", label: "Decision not sent" }
 ];
 
 const escapeHtml = (value = "") =>
@@ -187,6 +196,30 @@ function batchEmailActionLabel(decision) {
   if (decision === "admitted") return "admission";
   if (decision === "rejected") return "rejection";
   return formatApplicationStatus(decision).toLowerCase();
+}
+
+function hasInvitationSent(application) {
+  return Boolean(application?.invitation_sent_at);
+}
+
+function hasDecisionSent(application) {
+  return ["admitted", "rejected"].includes(application?.status) &&
+    application?.decision_sent_status === application.status &&
+    Boolean(application?.decision_sent_at);
+}
+
+function matchesApplicationEmailFilter(application) {
+  if (state.applicationEmailFilter === "invitation_sent") return hasInvitationSent(application);
+  if (state.applicationEmailFilter === "invitation_unsent") return !hasInvitationSent(application);
+  if (state.applicationEmailFilter === "decision_sent") return hasDecisionSent(application);
+  if (state.applicationEmailFilter === "decision_unsent") return !hasDecisionSent(application);
+  return true;
+}
+
+function canSendApplicationEmail(application, decision) {
+  if (!application || application.status !== decision) return false;
+  if (decision === "invited") return !hasInvitationSent(application);
+  return !hasDecisionSent(application);
 }
 
 const request = async (url, options = {}) => {
@@ -1065,9 +1098,10 @@ function renderApplicationsAdmin() {
   const byJob = state.applicationJobId === "all"
     ? state.applications
     : state.applications.filter((application) => application.job_id === state.applicationJobId);
-  const filtered = state.applicationStatusFilter === "all"
+  const byStatus = state.applicationStatusFilter === "all"
     ? byJob
     : byJob.filter((application) => application.status === state.applicationStatusFilter);
+  const filtered = byStatus.filter(matchesApplicationEmailFilter);
   const selectedApplications = state.applications.filter((application) => state.selectedApplicationIds.has(application.id));
   const selectedVisibleCount = filtered.filter((application) => state.selectedApplicationIds.has(application.id)).length;
   const selectedCount = state.selectedApplicationIds.size;
@@ -1075,12 +1109,14 @@ function renderApplicationsAdmin() {
   const selectedInvitedCount = selectedApplications.filter((application) => application.status === "invited").length;
   const selectedAdmittedCount = selectedApplications.filter((application) => application.status === "admitted").length;
   const selectedRejectedCount = selectedApplications.filter((application) => application.status === "rejected").length;
-  const selectedAllInvited = selectedCount > 0 && selectedInvitedCount === selectedCount;
-  const selectedAllAdmitted = selectedCount > 0 && selectedAdmittedCount === selectedCount;
-  const selectedAllRejected = selectedCount > 0 && selectedRejectedCount === selectedCount;
-  const emailBlocked = selectedCount > 0 && !selectedAllInvited && !selectedAllAdmitted && !selectedAllRejected;
+  const selectedCanSendInvitation = selectedApplications.length > 0 && selectedApplications.every((application) => canSendApplicationEmail(application, "invited"));
+  const selectedCanSendAdmission = selectedApplications.length > 0 && selectedApplications.every((application) => canSendApplicationEmail(application, "admitted"));
+  const selectedCanSendRejection = selectedApplications.length > 0 && selectedApplications.every((application) => canSendApplicationEmail(application, "rejected"));
+  const selectedInvitationSentCount = selectedApplications.filter(hasInvitationSent).length;
+  const selectedDecisionSentCount = selectedApplications.filter(hasDecisionSent).length;
+  const emailBlocked = selectedCount > 0 && !selectedCanSendInvitation && !selectedCanSendAdmission && !selectedCanSendRejection;
   const selectionSummary = selectedCount
-    ? `${selectedUnderReviewCount} under review, ${selectedInvitedCount} invited, ${selectedAdmittedCount} admitted, ${selectedRejectedCount} rejected`
+    ? `${selectedUnderReviewCount} under review, ${selectedInvitedCount} invited, ${selectedAdmittedCount} admitted, ${selectedRejectedCount} rejected · ${selectedInvitationSentCount} invitation sent, ${selectedDecisionSentCount} decision sent`
     : "No applicants selected";
   container.innerHTML = `
     <div class="panel">
@@ -1101,6 +1137,12 @@ function renderApplicationsAdmin() {
               ${applicationStatusOptions.map((status) => `<option value="${status.value}" ${state.applicationStatusFilter === status.value ? "selected" : ""}>${status.label}</option>`).join("")}
             </select>
           </label>
+          <label>
+            Email
+            <select id="application-email-filter">
+              ${applicationEmailFilterOptions.map((option) => `<option value="${option.value}" ${state.applicationEmailFilter === option.value ? "selected" : ""}>${option.label}</option>`).join("")}
+            </select>
+          </label>
         </div>
       </div>
       ${state.applicationNotice ? `<div class="notice ${state.applicationNotice.type === "error" ? "error" : ""}"><p>${escapeHtml(state.applicationNotice.message)}</p></div>` : ""}
@@ -1111,12 +1153,12 @@ function renderApplicationsAdmin() {
         </label>
         <span class="muted">${selectedCount} selected · ${escapeHtml(selectionSummary)}</span>
         <div class="row-actions">
-          <button type="button" data-batch-email="invited" ${selectedAllInvited ? "" : "disabled"}>Send invitation</button>
-          <button type="button" data-batch-email="admitted" ${selectedAllAdmitted ? "" : "disabled"}>Send admission</button>
-          <button class="danger" type="button" data-batch-email="rejected" ${selectedAllRejected ? "" : "disabled"}>Send rejection</button>
+          <button type="button" data-batch-email="invited" ${selectedCanSendInvitation ? "" : "disabled"}>Send invitation</button>
+          <button type="button" data-batch-email="admitted" ${selectedCanSendAdmission ? "" : "disabled"}>Send admission</button>
+          <button class="danger" type="button" data-batch-email="rejected" ${selectedCanSendRejection ? "" : "disabled"}>Send rejection</button>
           <button type="button" data-clear-selection ${selectedCount ? "" : "disabled"}>Clear</button>
         </div>
-        ${emailBlocked ? `<p class="mistake-guard">Email actions only notify applicants already marked with the matching status. Select only invited, only admitted, or only rejected applicants before sending.</p>` : ""}
+        ${emailBlocked ? `<p class="mistake-guard">Email actions only notify applicants already marked with the matching status and not already sent that email. Filter by status and email state before selecting applicants.</p>` : ""}
       </div>
       <div class="application-list">
         ${filtered.map((application) => {
@@ -1140,6 +1182,8 @@ function renderApplicationsAdmin() {
                     </select>
                   </label>
                   <span class="status-pill ${applicationStatusClass(application.status)}">${escapeHtml(formatApplicationStatus(application.status))}</span>
+                  ${hasInvitationSent(application) ? `<span class="status-pill email-sent">Invitation sent</span>` : ""}
+                  ${hasDecisionSent(application) ? `<span class="status-pill email-sent">Decision sent</span>` : ""}
                 </div>
               </div>
               <div class="inline-list">
@@ -1167,6 +1211,11 @@ function renderApplicationsAdmin() {
   });
   container.querySelector("#application-status-filter").addEventListener("change", (event) => {
     state.applicationStatusFilter = event.target.value;
+    state.applicationNotice = null;
+    renderApplicationsAdmin();
+  });
+  container.querySelector("#application-email-filter").addEventListener("change", (event) => {
+    state.applicationEmailFilter = event.target.value;
     state.applicationNotice = null;
     renderApplicationsAdmin();
   });
@@ -1243,11 +1292,30 @@ async function sendBatchDecisionEmails(decision) {
   const actionLabel = batchEmailActionLabel(decision);
   const selectedApplications = state.applications.filter((application) => state.selectedApplicationIds.has(application.id));
   const mismatchedSelections = selectedApplications.filter((application) => application.status !== decision);
+  const alreadySentSelections = selectedApplications.filter((application) => {
+    if (decision === "invited") return hasInvitationSent(application);
+    return hasDecisionSent(application);
+  });
+
+  if (!ids.length) {
+    state.applicationNotice = { type: "error", message: "Select at least one applicant." };
+    renderApplicationsAdmin();
+    return;
+  }
 
   if (mismatchedSelections.length) {
     state.applicationNotice = {
       type: "error",
       message: `${label} emails are blocked because ${mismatchedSelections.length} selected applicant${mismatchedSelections.length === 1 ? " is" : "s are"} not marked ${label.toLowerCase()}. Clear applicants with other statuses from the selection first.`
+    };
+    renderApplicationsAdmin();
+    return;
+  }
+
+  if (alreadySentSelections.length) {
+    state.applicationNotice = {
+      type: "error",
+      message: `${label} emails are blocked because ${alreadySentSelections.length} selected applicant${alreadySentSelections.length === 1 ? " has" : "s have"} already been sent this email. Filter for unsent applicants before selecting.`
     };
     renderApplicationsAdmin();
     return;
