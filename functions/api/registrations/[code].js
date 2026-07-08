@@ -8,7 +8,7 @@ const textFields = [
   "affiliation",
   "role_title",
   "start_date",
-  "linkedin_url",
+  "github_url",
   "mailing_address",
   "emergency_contact",
   "emergency_contact_phone",
@@ -126,7 +126,7 @@ export async function onRequestPost({ request, env, params }) {
           affiliation = ?,
           role_title = ?,
           start_date = ?,
-          linkedin_url = ?,
+          github_url = ?,
           mailing_address = ?,
           emergency_contact = ?,
           emergency_contact_phone = ?,
@@ -143,7 +143,7 @@ export async function onRequestPost({ request, env, params }) {
         member.affiliation,
         member.role_title,
         member.start_date,
-        member.linkedin_url,
+        member.github_url,
         member.mailing_address,
         member.emergency_contact,
         member.emergency_contact_phone,
@@ -155,7 +155,7 @@ export async function onRequestPost({ request, env, params }) {
         INSERT INTO members (
           id, application_id, lookup_code, job_id, job_title, full_name, preferred_name,
           personal_email, phone, country_region, timezone, affiliation, role_title,
-          start_date, linkedin_url, mailing_address,
+          start_date, github_url, mailing_address,
           emergency_contact, emergency_contact_phone, notes
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -174,7 +174,7 @@ export async function onRequestPost({ request, env, params }) {
         member.affiliation,
         member.role_title,
         member.start_date,
-        member.linkedin_url,
+        member.github_url,
         member.mailing_address,
         member.emergency_contact,
         member.emergency_contact_phone,

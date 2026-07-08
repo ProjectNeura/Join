@@ -746,7 +746,7 @@ async function renderRegistration(code) {
     affiliation: member?.affiliation || "",
     role_title: member?.role_title || application.job_title || "",
     start_date: member?.start_date || "",
-    linkedin_url: member?.linkedin_url || "",
+    github_url: member?.github_url || "",
     mailing_address: member?.mailing_address || "",
     emergency_contact: member?.emergency_contact || "",
     emergency_contact_phone: member?.emergency_contact_phone || "",
@@ -772,7 +772,7 @@ async function renderRegistration(code) {
           <label>Current affiliation <input name="affiliation" value="${escapeHtml(values.affiliation)}" placeholder="School, lab, or company"></label>
           <label>Role title <input name="role_title" value="${escapeHtml(values.role_title)}" placeholder="Research intern"></label>
           <label>Expected start date <input name="start_date" type="date" value="${escapeHtml(values.start_date)}"></label>
-          <label>LinkedIn URL <input name="linkedin_url" type="url" value="${escapeHtml(values.linkedin_url)}"></label>
+          <label>GitHub URL <input name="github_url" type="url" value="${escapeHtml(values.github_url)}"></label>
           <label class="full">Mailing address <textarea name="mailing_address">${escapeHtml(values.mailing_address)}</textarea></label>
           <label>Emergency contact <input name="emergency_contact" value="${escapeHtml(values.emergency_contact)}"></label>
           <label>Emergency contact phone <input name="emergency_contact_phone" value="${escapeHtml(values.emergency_contact_phone)}"></label>
@@ -1513,7 +1513,7 @@ function renderMembersAdmin() {
               ${member.country_region ? `<p><strong>Country or region:</strong> ${escapeHtml(member.country_region)}</p>` : ""}
               ${member.role_title ? `<p><strong>Role title:</strong> ${escapeHtml(member.role_title)}</p>` : ""}
               ${member.start_date ? `<p><strong>Start date:</strong> ${escapeHtml(member.start_date)}</p>` : ""}
-              ${member.linkedin_url ? `<p><strong>LinkedIn:</strong> <a href="${escapeHtml(member.linkedin_url)}" target="_blank" rel="noreferrer">${escapeHtml(member.linkedin_url)}</a></p>` : ""}
+              ${member.github_url ? `<p><strong>GitHub:</strong> <a href="${escapeHtml(member.github_url)}" target="_blank" rel="noreferrer">${escapeHtml(member.github_url)}</a></p>` : ""}
               ${member.mailing_address ? `<p><strong>Mailing address:</strong> ${nl2br(member.mailing_address)}</p>` : ""}
               ${member.emergency_contact ? `<p><strong>Emergency contact:</strong> ${escapeHtml(member.emergency_contact)}${member.emergency_contact_phone ? ` · ${escapeHtml(member.emergency_contact_phone)}` : ""}</p>` : ""}
               ${member.notes ? `<p><strong>Notes:</strong> ${nl2br(member.notes)}</p>` : ""}
