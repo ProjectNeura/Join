@@ -48,8 +48,12 @@ export async function onRequestGet({ env, params }) {
     } catch {
       application.custom_answers = [];
     }
-    application.can_withdraw = application.job_status === "open";
-    application.status = publicApplicationStatus(application);
+    const publicStatus = publicApplicationStatus(application);
+    application.can_withdraw = application.job_status === "open" && !["admitted", "rejected"].includes(publicStatus);
+    application.withdraw_blocked_reason = ["admitted", "rejected"].includes(publicStatus)
+      ? "A decision has already been sent for this application."
+      : "";
+    application.status = publicStatus;
     delete application.invitation_sent_at;
     delete application.decision_sent_at;
     delete application.decision_sent_status;
@@ -70,7 +74,13 @@ export async function onRequestDelete({ env, params }) {
     }
 
     const application = await db.prepare(`
-      SELECT applications.id, jobs.status AS job_status
+      SELECT
+        applications.id,
+        applications.status,
+        applications.invitation_sent_at,
+        applications.decision_sent_at,
+        applications.decision_sent_status,
+        jobs.status AS job_status
       FROM applications
       LEFT JOIN jobs ON jobs.id = applications.job_id
       WHERE applications.lookup_code = ?
@@ -82,6 +92,10 @@ export async function onRequestDelete({ env, params }) {
 
     if (application.job_status !== "open") {
       return error("This application can only be withdrawn while the job post is still open.", 409);
+    }
+
+    if (["admitted", "rejected"].includes(publicApplicationStatus(application))) {
+      return error("This application can no longer be withdrawn because a decision has already been sent.", 409);
     }
 
     await db.prepare("DELETE FROM applications WHERE id = ?").bind(application.id).run();

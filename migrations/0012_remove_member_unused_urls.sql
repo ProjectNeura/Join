@@ -1,4 +1,8 @@
-CREATE TABLE IF NOT EXISTS members (
+DROP INDEX IF EXISTS idx_members_created;
+DROP INDEX IF EXISTS idx_members_credentials_sent;
+DROP INDEX IF EXISTS idx_members_lookup_code;
+
+CREATE TABLE members_next (
   id TEXT PRIMARY KEY,
   application_id TEXT NOT NULL UNIQUE,
   lookup_code TEXT NOT NULL UNIQUE,
@@ -24,40 +28,60 @@ CREATE TABLE IF NOT EXISTS members (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+INSERT INTO members_next (
+  id,
+  application_id,
+  lookup_code,
+  job_id,
+  job_title,
+  full_name,
+  preferred_name,
+  personal_email,
+  phone,
+  country_region,
+  timezone,
+  affiliation,
+  role_title,
+  start_date,
+  linkedin_url,
+  mailing_address,
+  emergency_contact,
+  emergency_contact_phone,
+  notes,
+  account_email,
+  credentials_sent_at,
+  created_at,
+  updated_at
+)
+SELECT
+  id,
+  application_id,
+  lookup_code,
+  job_id,
+  job_title,
+  full_name,
+  preferred_name,
+  personal_email,
+  phone,
+  country_region,
+  timezone,
+  affiliation,
+  role_title,
+  start_date,
+  linkedin_url,
+  mailing_address,
+  emergency_contact,
+  emergency_contact_phone,
+  notes,
+  account_email,
+  credentials_sent_at,
+  created_at,
+  updated_at
+FROM members;
+
+DROP TABLE members;
+ALTER TABLE members_next RENAME TO members;
+
 CREATE INDEX IF NOT EXISTS idx_members_created ON members(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_members_credentials_sent ON members(credentials_sent_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_members_lookup_code ON members(lookup_code);
-
-UPDATE email_templates
-SET body = 'Hi {{full_name}},
-
-Thank you for applying to {{job_title}}. We are pleased to let you know that your application has been admitted to the next stage.
-
-Please complete your member registration here: {{registration_url}}
-
-Project Neura',
-updated_at = CURRENT_TIMESTAMP
-WHERE key = 'admitted'
-  AND body = 'Hi {{full_name}},
-
-Thank you for applying to {{job_title}}. We are pleased to let you know that your application has been admitted to the next stage.
-
-Project Neura staff will follow up with next steps shortly.
-
-Project Neura';
-
-INSERT OR IGNORE INTO email_templates (key, subject, body) VALUES
-(
-  'account_credentials',
-  'Your Project Neura email account',
-  'Hi {{preferred_name}},
-
-Your Project Neura email account has been created.
-
-Email address: {{account_email}}
-Temporary password: {{temporary_password}}
-
-Please sign in and change this password after first use.
-
-Project Neura'
-);
