@@ -1175,8 +1175,8 @@ function renderApplicationsAdmin() {
                     <input type="checkbox" data-application-select="${escapeHtml(application.id)}" ${state.selectedApplicationIds.has(application.id) ? "checked" : ""}>
                     Select
                   </label>
-                  <label>
-                    Status
+                  <label class="application-status-control">
+                    <span>Status</span>
                     <select data-application-status="${escapeHtml(application.id)}">
                       ${applicationStatusOptions.map((status) => `<option value="${status.value}" ${application.status === status.value ? "selected" : ""}>${status.label}</option>`).join("")}
                     </select>

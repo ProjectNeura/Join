@@ -975,17 +975,41 @@ td small {
   gap: 10px;
 }
 
-.application-filters label,
-.application-card-actions label {
+.application-filters label {
   min-width: 160px;
 }
 
 .application-card-actions {
+  display: grid;
+  grid-template-columns: auto minmax(190px, 240px) auto;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px 10px;
 }
 
 .application-card-actions .checkbox-label {
   min-width: auto;
+}
+
+.application-status-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.application-status-control span {
+  flex: 0 0 auto;
+}
+
+.application-status-control select {
+  min-height: 40px;
+  padding: 8px 36px 8px 12px;
+}
+
+.application-card-actions .status-pill {
+  justify-self: start;
 }
 
 .bulk-bar {
@@ -1115,6 +1139,16 @@ td small {
 }
 
 @media (max-width: 640px) {
+  .application-card-actions {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .application-status-control {
+    justify-content: space-between;
+  }
+
   .standard-field-row {
     grid-template-columns: 1fr;
   }
