@@ -99,7 +99,7 @@ export const defaultStandardFields = [
   { id: "cover_letter", label: "Cover letter", type: "textarea", shown: true, required: true }
 ];
 
-export const applicationStatuses = ["under_review", "admitted", "rejected"];
+export const applicationStatuses = ["under_review", "invited", "admitted", "rejected"];
 
 export function normalizeApplicationStatus(value) {
   return applicationStatuses.includes(value) ? value : "under_review";

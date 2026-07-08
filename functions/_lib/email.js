@@ -44,6 +44,20 @@ export const defaultEmailTemplates = {
       "Project Neura"
     ].join("\n")
   },
+  invited: {
+    key: "invited",
+    label: "Interview invitation",
+    subject: "Project Neura interview invitation",
+    body: [
+      "Hi {{full_name}},",
+      "",
+      "Thank you for applying to {{job_title}}. We would like to invite you to interview with Project Neura.",
+      "",
+      "Project Neura staff will follow up shortly with scheduling details.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  },
   rejected: {
     key: "rejected",
     label: "Rejection",

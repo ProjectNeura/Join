@@ -1,7 +1,7 @@
 import { applicationStatuses, error, json, readJson, requireDb, workerError } from "../../../../_lib/http.js";
 import { getSmtpStatus, sendApplicationDecisionEmail } from "../../../../_lib/email.js";
 
-const emailDecisions = ["admitted", "rejected"];
+const emailDecisions = ["invited", "admitted", "rejected"];
 
 function normalizeIds(value) {
   if (!Array.isArray(value)) return [];
@@ -20,7 +20,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (!emailDecisions.includes(decision) || !applicationStatuses.includes(decision)) {
-      return error("Choose admission or rejection", 422);
+      return error("Choose interview invitation, admission, or rejection", 422);
     }
 
     const placeholders = ids.map(() => "?").join(", ");
@@ -38,6 +38,11 @@ export async function onRequestPost({ request, env }) {
 
     const admittedSelections = results.filter((application) => application.status === "admitted");
     const rejectedSelections = results.filter((application) => application.status === "rejected");
+    const nonReviewSelections = results.filter((application) => application.status !== "under_review");
+
+    if (decision === "invited" && nonReviewSelections.length) {
+      return error(`Interview invitations are blocked because ${nonReviewSelections.length} selected applicant${nonReviewSelections.length === 1 ? " is" : "s are"} no longer under review.`, 409);
+    }
 
     if (decision === "admitted" && rejectedSelections.length) {
       return error(`Admission emails are blocked because ${rejectedSelections.length} selected applicant${rejectedSelections.length === 1 ? " is" : "s are"} already rejected.`, 409);

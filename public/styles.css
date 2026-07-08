@@ -414,6 +414,12 @@ button:disabled {
   background: rgba(36, 138, 61, 0.08);
 }
 
+.status-pill.invited {
+  color: #0057b8;
+  border-color: rgba(0, 87, 184, 0.16);
+  background: rgba(0, 87, 184, 0.08);
+}
+
 .status-pill.rejected {
   color: var(--danger);
   border-color: rgba(179, 38, 30, 0.16);
