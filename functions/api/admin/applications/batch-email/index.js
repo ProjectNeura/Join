@@ -79,7 +79,11 @@ export async function onRequestPost({ request, env }) {
           title: application.job_title,
           location: application.job_location,
           employment_type: application.job_employment_type
-        }, decision);
+        }, decision, {
+          registrationUrl: decision === "admitted"
+            ? new URL(`/register/${encodeURIComponent(application.lookup_code)}`, request.url).toString()
+            : ""
+        });
         if (decision === "invited") {
           await db.prepare("UPDATE applications SET invitation_sent_at = CURRENT_TIMESTAMP WHERE id = ?")
             .bind(application.id)

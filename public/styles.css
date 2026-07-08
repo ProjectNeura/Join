@@ -967,7 +967,6 @@ td small {
 }
 
 .application-filters,
-.application-card-actions,
 .bulk-bar {
   display: flex;
   flex-wrap: wrap;
@@ -979,11 +978,31 @@ td small {
   min-width: 160px;
 }
 
-.application-card-actions {
+.application-card-header {
   display: grid;
-  grid-template-columns: auto minmax(190px, 240px) auto;
-  justify-content: flex-end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+}
+
+.application-card-title {
+  min-width: 0;
+}
+
+.application-card-actions {
+  display: flex;
+  min-width: min(100%, 520px);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.application-card-controls,
+.application-email-badges {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px 10px;
 }
 
@@ -1004,12 +1023,9 @@ td small {
 }
 
 .application-status-control select {
+  width: 220px;
   min-height: 40px;
   padding: 8px 36px 8px 12px;
-}
-
-.application-card-actions .status-pill {
-  justify-self: start;
 }
 
 .bulk-bar {
@@ -1040,6 +1056,24 @@ td small {
 
 .application-card p {
   margin: 7px 0;
+}
+
+.credential-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.member-details {
+  display: grid;
+  gap: 6px;
+  color: #333336;
+}
+
+.member-details p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .variable-strip {
@@ -1139,14 +1173,27 @@ td small {
 }
 
 @media (max-width: 640px) {
-  .application-card-actions {
+  .application-card-header {
     grid-template-columns: 1fr;
-    justify-content: stretch;
+  }
+
+  .application-card-actions {
+    align-items: stretch;
+    min-width: 0;
     width: 100%;
+  }
+
+  .application-card-controls,
+  .application-email-badges {
+    justify-content: flex-start;
   }
 
   .application-status-control {
     justify-content: space-between;
+  }
+
+  .application-status-control select {
+    width: min(100%, 220px);
   }
 
   .standard-field-row {
@@ -1170,6 +1217,10 @@ td small {
 
   .field-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .credential-grid {
+    grid-template-columns: 1fr;
   }
 
   .field-row label:nth-child(1),

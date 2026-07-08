@@ -9,7 +9,11 @@ export const emailTemplateVariables = [
   "job_employment_type",
   "lookup_code",
   "recovery_code",
-  "check_url"
+  "check_url",
+  "registration_url",
+  "preferred_name",
+  "account_email",
+  "temporary_password"
 ];
 
 export const defaultEmailTemplates = {
@@ -39,7 +43,7 @@ export const defaultEmailTemplates = {
       "",
       "Thank you for applying to {{job_title}}. We are pleased to let you know that your application has been admitted to the next stage.",
       "",
-      "Project Neura staff will follow up with next steps shortly.",
+      "Please complete your member registration here: {{registration_url}}",
       "",
       "Project Neura"
     ].join("\n")
@@ -86,6 +90,23 @@ export const defaultEmailTemplates = {
       "This verification code expires in 15 minutes.",
       "",
       "If you did not request this email, you can ignore it.",
+      "",
+      "Project Neura"
+    ].join("\n")
+  },
+  account_credentials: {
+    key: "account_credentials",
+    label: "Email account credentials",
+    subject: "Your Project Neura email account",
+    body: [
+      "Hi {{preferred_name}},",
+      "",
+      "Your Project Neura email account has been created.",
+      "",
+      "Email address: {{account_email}}",
+      "Temporary password: {{temporary_password}}",
+      "",
+      "Please sign in and change this password after first use.",
       "",
       "Project Neura"
     ].join("\n")
@@ -179,7 +200,21 @@ function createTemplateContext(application, job = {}, extras = {}) {
     job_employment_type: job.employment_type || application.job_employment_type || "",
     lookup_code: application.lookup_code || "",
     recovery_code: extras.recoveryCode || extras.recovery_code || "",
-    check_url: extras.checkUrl || extras.check_url || ""
+    check_url: extras.checkUrl || extras.check_url || "",
+    registration_url: extras.registrationUrl || extras.registration_url || ""
+  };
+}
+
+function createMemberTemplateContext(member, extras = {}) {
+  const preferredName = member.preferred_name || member.full_name || "";
+  return {
+    full_name: member.full_name || "",
+    preferred_name: preferredName,
+    email: member.personal_email || "",
+    job_title: member.job_title || "",
+    lookup_code: member.lookup_code || "",
+    account_email: extras.accountEmail || extras.account_email || member.account_email || "",
+    temporary_password: extras.temporaryPassword || extras.temporary_password || ""
   };
 }
 
@@ -260,7 +295,7 @@ export async function sendApplicationConfirmation(env, db, application, job, che
   return { sent: true };
 }
 
-export async function sendApplicationDecisionEmail(env, db, application, job, decision) {
+export async function sendApplicationDecisionEmail(env, db, application, job, decision, extras = {}) {
   const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
   const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
   const template = defaultEmailTemplates[decision] ? await getEmailTemplate(db, decision) : null;
@@ -268,7 +303,7 @@ export async function sendApplicationDecisionEmail(env, db, application, job, de
   if (!template) {
     throw new Error("Invalid email decision");
   }
-  const context = createTemplateContext(application, job);
+  const context = createTemplateContext(application, job, extras);
 
   await sendSmtp(env, {
     from,
@@ -291,6 +326,23 @@ export async function sendApplicationRecoveryCode(env, db, email, recoveryCode) 
     from,
     replyTo,
     to: email,
+    subject: renderEmailTemplate(template.subject, context),
+    text: renderEmailTemplate(template.body, context)
+  });
+
+  return { sent: true };
+}
+
+export async function sendMemberAccountCredentials(env, db, member, credentials) {
+  const from = env.SMTP_FROM || `Project Neura <${env.SMTP_USERNAME}>`;
+  const replyTo = env.SMTP_REPLY_TO || env.SMTP_USERNAME;
+  const template = await getEmailTemplate(db, "account_credentials");
+  const context = createMemberTemplateContext(member, credentials);
+
+  await sendSmtp(env, {
+    from,
+    replyTo,
+    to: member.personal_email,
     subject: renderEmailTemplate(template.subject, context),
     text: renderEmailTemplate(template.body, context)
   });

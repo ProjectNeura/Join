@@ -11,7 +11,10 @@ const state = {
   applicationNotice: null,
   editingJobId: null,
   emailTemplates: [],
-  emailTemplateVariables: []
+  emailTemplateVariables: [],
+  members: [],
+  selectedMemberIds: new Set(),
+  memberNotice: null
 };
 
 const defaultStandardFields = [
@@ -395,6 +398,13 @@ function renderApplicationDetails(application) {
       <button class="danger" type="button" data-withdraw-application="${escapeHtml(application.lookup_code)}">Withdraw application</button>
     </div>
   ` : "";
+  const registrationMarkup = application.status === "admitted" ? `
+    <div class="notice">
+      <strong>Complete member registration</strong>
+      <p class="muted">Your admission has been sent. Complete registration so Project Neura can create your member record.</p>
+      <a class="button primary" href="/register/${encodeURIComponent(application.lookup_code)}" data-link>Complete registration</a>
+    </div>
+  ` : "";
   return `
     <article class="application-card retrieved-application">
       <div class="panel-toolbar">
@@ -419,6 +429,7 @@ function renderApplicationDetails(application) {
       ${application.work_authorization ? `<p><strong>Work authorization:</strong> ${escapeHtml(application.work_authorization)}</p>` : ""}
       ${renderCustomAnswers(application.custom_answers)}
       <p class="prose">${nl2br(application.cover_letter)}</p>
+      ${registrationMarkup}
       ${withdrawMarkup}
     </article>
   `;
@@ -717,6 +728,86 @@ async function withdrawApplication(application, result, notice) {
   }
 }
 
+async function renderRegistration(code) {
+  renderLoading("Loading registration");
+  const { application, member } = await request(`/api/registrations/${encodeURIComponent(code)}`);
+  const values = {
+    full_name: member?.full_name || application.full_name || "",
+    preferred_name: member?.preferred_name || "",
+    personal_email: member?.personal_email || application.email || "",
+    phone: member?.phone || application.phone || "",
+    country_region: member?.country_region || "",
+    timezone: member?.timezone || "",
+    affiliation: member?.affiliation || "",
+    role_title: member?.role_title || "",
+    start_date: member?.start_date || "",
+    github_url: member?.github_url || "",
+    linkedin_url: member?.linkedin_url || "",
+    website_url: member?.website_url || "",
+    mailing_address: member?.mailing_address || "",
+    emergency_contact: member?.emergency_contact || "",
+    emergency_contact_phone: member?.emergency_contact_phone || "",
+    notes: member?.notes || ""
+  };
+
+  app.innerHTML = `
+    <section class="page">
+      <div class="page-head">
+        <p class="eyebrow">Member onboarding</p>
+        <h1>Complete registration.</h1>
+        <p>${escapeHtml(application.job_title || "Project Neura role")}</p>
+      </div>
+      <form class="panel" id="registration-form">
+        <div id="registration-notice">${member ? '<p class="notice">Registration is already on file. You can update it below.</p>' : ""}</div>
+        <div class="form-grid">
+          <label>Full legal name <input name="full_name" value="${escapeHtml(values.full_name)}" required></label>
+          <label>Preferred name <input name="preferred_name" value="${escapeHtml(values.preferred_name)}"></label>
+          <label>Personal email <input name="personal_email" type="email" value="${escapeHtml(values.personal_email)}" required></label>
+          <label>Phone <input name="phone" value="${escapeHtml(values.phone)}"></label>
+          <label>Country or region <input name="country_region" value="${escapeHtml(values.country_region)}"></label>
+          <label>Time zone <input name="timezone" value="${escapeHtml(values.timezone)}" placeholder="America/Toronto"></label>
+          <label>Current affiliation <input name="affiliation" value="${escapeHtml(values.affiliation)}" placeholder="School, lab, or company"></label>
+          <label>Role title <input name="role_title" value="${escapeHtml(values.role_title)}" placeholder="Research intern"></label>
+          <label>Expected start date <input name="start_date" type="date" value="${escapeHtml(values.start_date)}"></label>
+          <label>GitHub URL <input name="github_url" type="url" value="${escapeHtml(values.github_url)}"></label>
+          <label>LinkedIn URL <input name="linkedin_url" type="url" value="${escapeHtml(values.linkedin_url)}"></label>
+          <label>Website URL <input name="website_url" type="url" value="${escapeHtml(values.website_url)}"></label>
+          <label class="full">Mailing address <textarea name="mailing_address">${escapeHtml(values.mailing_address)}</textarea></label>
+          <label>Emergency contact <input name="emergency_contact" value="${escapeHtml(values.emergency_contact)}"></label>
+          <label>Emergency contact phone <input name="emergency_contact_phone" value="${escapeHtml(values.emergency_contact_phone)}"></label>
+          <label class="full">Notes <textarea name="notes">${escapeHtml(values.notes)}</textarea></label>
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">${member ? "Update registration" : "Submit registration"}</button>
+          <a class="button ghost" href="/check" data-link>Back to check-back</a>
+        </div>
+      </form>
+    </section>
+  `;
+
+  app.querySelector("#registration-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const notice = form.querySelector("#registration-notice");
+    const button = form.querySelector("button[type='submit']");
+    const payload = Object.fromEntries(new FormData(form).entries());
+    button.disabled = true;
+    notice.innerHTML = "";
+    try {
+      await request(`/api/registrations/${encodeURIComponent(code)}`, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      notice.innerHTML = `<p class="notice"><strong>Registration saved.</strong> Project Neura staff can now complete your account setup.</p>`;
+      button.textContent = "Update registration";
+    } catch (error) {
+      notice.innerHTML = `<p class="notice error">${escapeHtml(error.message)}</p>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 async function renderAdmin() {
   renderLoading("Loading admin panel");
   await loadAdminData();
@@ -730,6 +821,7 @@ async function renderAdmin() {
         <div class="admin-tabs" role="group" aria-label="Admin sections">
           <button type="button" data-admin-tab="jobs" aria-pressed="${state.adminTab === "jobs"}">Jobs</button>
           <button type="button" data-admin-tab="applications" aria-pressed="${state.adminTab === "applications"}">Applications</button>
+          <button type="button" data-admin-tab="members" aria-pressed="${state.adminTab === "members"}">Members</button>
           <button type="button" data-admin-tab="email" aria-pressed="${state.adminTab === "email"}">Email</button>
         </div>
       </div>
@@ -746,19 +838,25 @@ async function renderAdmin() {
 }
 
 async function loadAdminData() {
-  const [{ jobs }, { applications }] = await Promise.all([
+  const [{ jobs }, { applications }, { members }] = await Promise.all([
     request("/api/admin/jobs"),
-    request("/api/admin/applications")
+    request("/api/admin/applications"),
+    request("/api/admin/members")
   ]);
   state.adminJobs = jobs;
   state.applications = applications;
+  state.members = members;
   const existingIds = new Set(applications.map((application) => application.id));
   state.selectedApplicationIds = new Set([...state.selectedApplicationIds].filter((id) => existingIds.has(id)));
+  const existingMemberIds = new Set(members.map((member) => member.id));
+  state.selectedMemberIds = new Set([...state.selectedMemberIds].filter((id) => existingMemberIds.has(id)));
 }
 
 function renderAdminContent() {
   if (state.adminTab === "applications") {
     renderApplicationsAdmin();
+  } else if (state.adminTab === "members") {
+    renderMembersAdmin();
   } else if (state.adminTab === "email") {
     renderEmailAdmin();
   } else {
@@ -1356,6 +1454,173 @@ async function sendBatchDecisionEmails(decision) {
   renderApplicationsAdmin();
 }
 
+function renderMembersAdmin() {
+  const container = app.querySelector("#admin-content");
+  const selectedCount = state.selectedMemberIds.size;
+  const selectedVisibleCount = state.members.filter((member) => state.selectedMemberIds.has(member.id)).length;
+  const credentialsSentCount = state.members.filter((member) => state.selectedMemberIds.has(member.id) && member.credentials_sent_at).length;
+  container.innerHTML = `
+    <div class="panel">
+      <div class="panel-toolbar">
+        <div>
+          <h2>Members</h2>
+          <p class="muted">Registered admitted applicants and account setup.</p>
+        </div>
+      </div>
+      ${state.memberNotice ? `<div class="notice ${state.memberNotice.type === "error" ? "error" : ""}"><p>${escapeHtml(state.memberNotice.message)}</p></div>` : ""}
+      <div class="bulk-bar">
+        <label class="checkbox-label">
+          <input id="member-select-all" type="checkbox" ${state.members.length && selectedVisibleCount === state.members.length ? "checked" : ""}>
+          Select visible
+        </label>
+        <span class="muted">${selectedCount} selected · ${credentialsSentCount} credentials sent</span>
+        <div class="row-actions">
+          <button type="button" data-send-member-credentials ${selectedCount ? "" : "disabled"}>Create accounts and send credentials</button>
+          <button type="button" data-clear-member-selection ${selectedCount ? "" : "disabled"}>Clear</button>
+        </div>
+      </div>
+      <div class="application-list">
+        ${state.members.map((member) => `
+          <article class="application-card member-card">
+            <div class="application-card-header">
+              <div class="application-card-title">
+                <h3>${escapeHtml(member.full_name)}</h3>
+                <p>${escapeHtml(member.job_title || "Project Neura member")} • Registered ${escapeHtml(formatDate(member.created_at))}</p>
+              </div>
+              <div class="application-card-actions">
+                <div class="application-card-controls">
+                  <label class="checkbox-label">
+                    <input type="checkbox" data-member-select="${escapeHtml(member.id)}" ${state.selectedMemberIds.has(member.id) ? "checked" : ""}>
+                    Select
+                  </label>
+                  ${member.credentials_sent_at ? `<span class="status-pill email-sent">Credentials sent</span>` : `<span class="status-pill under-review">Credentials pending</span>`}
+                </div>
+              </div>
+            </div>
+            <div class="inline-list">
+              <span>${escapeHtml(member.personal_email)}</span>
+              ${member.phone ? `<span>${escapeHtml(member.phone)}</span>` : ""}
+              ${member.affiliation ? `<span>${escapeHtml(member.affiliation)}</span>` : ""}
+              ${member.timezone ? `<span>${escapeHtml(member.timezone)}</span>` : ""}
+            </div>
+            <div class="credential-grid">
+              <label>Project Neura email <input data-member-account-email="${escapeHtml(member.id)}" type="email" value="${escapeHtml(member.account_email || suggestedMemberEmail(member))}" placeholder="name@projectneura.org"></label>
+              <p class="muted">DirectAdmin will create this mailbox and generate a temporary password when credentials are sent.</p>
+            </div>
+            <div class="member-details">
+              ${member.preferred_name ? `<p><strong>Preferred name:</strong> ${escapeHtml(member.preferred_name)}</p>` : ""}
+              ${member.country_region ? `<p><strong>Country or region:</strong> ${escapeHtml(member.country_region)}</p>` : ""}
+              ${member.role_title ? `<p><strong>Role title:</strong> ${escapeHtml(member.role_title)}</p>` : ""}
+              ${member.start_date ? `<p><strong>Start date:</strong> ${escapeHtml(member.start_date)}</p>` : ""}
+              ${member.github_url ? `<p><strong>GitHub:</strong> <a href="${escapeHtml(member.github_url)}" target="_blank" rel="noreferrer">${escapeHtml(member.github_url)}</a></p>` : ""}
+              ${member.linkedin_url ? `<p><strong>LinkedIn:</strong> <a href="${escapeHtml(member.linkedin_url)}" target="_blank" rel="noreferrer">${escapeHtml(member.linkedin_url)}</a></p>` : ""}
+              ${member.website_url ? `<p><strong>Website:</strong> <a href="${escapeHtml(member.website_url)}" target="_blank" rel="noreferrer">${escapeHtml(member.website_url)}</a></p>` : ""}
+              ${member.mailing_address ? `<p><strong>Mailing address:</strong> ${nl2br(member.mailing_address)}</p>` : ""}
+              ${member.emergency_contact ? `<p><strong>Emergency contact:</strong> ${escapeHtml(member.emergency_contact)}${member.emergency_contact_phone ? ` · ${escapeHtml(member.emergency_contact_phone)}` : ""}</p>` : ""}
+              ${member.notes ? `<p><strong>Notes:</strong> ${nl2br(member.notes)}</p>` : ""}
+            </div>
+          </article>
+        `).join("") || '<div class="empty">No registered members yet.</div>'}
+      </div>
+    </div>
+  `;
+
+  const selectAll = container.querySelector("#member-select-all");
+  if (selectAll) {
+    selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < state.members.length;
+    selectAll.addEventListener("change", () => {
+      state.members.forEach((member) => {
+        if (selectAll.checked) {
+          state.selectedMemberIds.add(member.id);
+        } else {
+          state.selectedMemberIds.delete(member.id);
+        }
+      });
+      state.memberNotice = null;
+      renderMembersAdmin();
+    });
+  }
+
+  container.querySelectorAll("[data-member-select]").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        state.selectedMemberIds.add(input.dataset.memberSelect);
+      } else {
+        state.selectedMemberIds.delete(input.dataset.memberSelect);
+      }
+      state.memberNotice = null;
+      renderMembersAdmin();
+    });
+  });
+
+  container.querySelector("[data-send-member-credentials]")?.addEventListener("click", () => sendMemberCredentials());
+  container.querySelector("[data-clear-member-selection]")?.addEventListener("click", () => {
+    state.selectedMemberIds.clear();
+    state.memberNotice = null;
+    renderMembersAdmin();
+  });
+}
+
+function suggestedMemberEmail(member) {
+  const base = (member.preferred_name || member.full_name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 48) || "member";
+  return `${base}@projectneura.org`;
+}
+
+async function sendMemberCredentials() {
+  const selectedMembers = state.members.filter((member) => state.selectedMemberIds.has(member.id));
+  const container = app.querySelector("#admin-content");
+  const items = selectedMembers.map((member) => ({
+    id: member.id,
+    account_email: container.querySelector(`[data-member-account-email="${CSS.escape(member.id)}"]`)?.value || ""
+  }));
+  const missing = items.filter((item) => !item.account_email);
+
+  if (!items.length) {
+    state.memberNotice = { type: "error", message: "Select at least one member." };
+    renderMembersAdmin();
+    return;
+  }
+
+  if (missing.length) {
+    state.memberNotice = { type: "error", message: "Every selected member needs a Project Neura email address." };
+    renderMembersAdmin();
+    return;
+  }
+
+  const typed = window.prompt(`Type CREATE to create ${items.length} DirectAdmin mailbox${items.length === 1 ? "" : "es"} and email generated credentials.`);
+  if (typed !== "CREATE") {
+    state.memberNotice = { type: "error", message: "Account creation cancelled." };
+    renderMembersAdmin();
+    return;
+  }
+
+  state.memberNotice = { type: "success", message: "Creating mailboxes and sending credential emails..." };
+  renderMembersAdmin();
+
+  try {
+    const result = await request("/api/admin/members/credentials", {
+      method: "POST",
+      body: JSON.stringify({ items })
+    });
+    const failedIds = new Set(result.failed.map((item) => item.id).filter(Boolean));
+    state.selectedMemberIds = failedIds;
+    await loadAdminData();
+    const failedText = result.failed.length ? ` ${result.failed.length} failed and remain selected.` : "";
+    state.memberNotice = {
+      type: result.failed.length ? "error" : "success",
+      message: `Created and emailed ${result.sent.length} account${result.sent.length === 1 ? "" : "s"}.${failedText}`
+    };
+  } catch (error) {
+    state.memberNotice = { type: "error", message: error.message };
+  }
+
+  renderMembersAdmin();
+}
+
 async function renderEmailAdmin() {
   const container = app.querySelector("#admin-content");
   container.innerHTML = `
@@ -1455,6 +1720,8 @@ async function render() {
       await renderJob(decodeURIComponent(path.split("/").pop()));
     } else if (path === "/check") {
       renderCheck();
+    } else if (path.startsWith("/register/")) {
+      await renderRegistration(decodeURIComponent(path.split("/").pop()));
     } else if (path === "/admin") {
       await renderAdmin();
     } else {
