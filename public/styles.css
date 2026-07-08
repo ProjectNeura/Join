@@ -752,21 +752,41 @@ textarea {
 
 .standard-field-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(92px, auto) minmax(120px, auto);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 12px;
-  align-items: center;
+  align-items: end;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.58);
 }
 
+.standard-field-row > div:first-child {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
 .standard-field-row strong {
   display: block;
 }
 
+.standard-field-row .checkbox-label {
+  grid-row: 2;
+  justify-self: start;
+}
+
+.standard-field-row .checkbox-label:nth-of-type(1) {
+  grid-column: 1 / span 5;
+}
+
+.standard-field-row .checkbox-label:nth-of-type(2) {
+  grid-column: 6 / span 7;
+}
+
 .standard-field-row .field-order-actions {
-  justify-content: flex-end;
+  grid-column: 1 / span 6;
+  grid-row: 3;
+  justify-content: flex-start;
 }
 
 .field-row {
@@ -1086,28 +1106,9 @@ td small {
     grid-template-columns: 1fr;
   }
 
-  .standard-field-row {
-    grid-template-columns: minmax(0, 1fr) minmax(145px, auto);
-    align-items: start;
-  }
-
-  .standard-field-row > div:first-child {
-    grid-column: 1;
-    grid-row: 1 / span 2;
-  }
-
-  .standard-field-row .checkbox-label {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .standard-field-row .field-order-actions {
-    grid-column: 2;
-    justify-content: flex-start;
-  }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .standard-field-row {
     grid-template-columns: 1fr;
   }
@@ -1126,9 +1127,7 @@ td small {
   .standard-field-row .field-order-actions button {
     flex: 1;
   }
-}
 
-@media (max-width: 640px) {
   .field-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
