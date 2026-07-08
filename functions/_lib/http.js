@@ -106,8 +106,16 @@ export function normalizeApplicationStatus(value) {
 }
 
 export function normalizeStandardFields(value) {
-  const overrides = new Map(readJsonArray(value).map((field) => [field?.id, field]));
-  return defaultStandardFields.map((field) => {
+  const submittedFields = readJsonArray(value);
+  const overrides = new Map(submittedFields.map((field) => [field?.id, field]));
+  const defaults = new Map(defaultStandardFields.map((field) => [field.id, field]));
+  const orderedIds = [
+    ...submittedFields.map((field) => field?.id).filter((id) => defaults.has(id)),
+    ...defaultStandardFields.map((field) => field.id)
+  ].filter((id, index, ids) => ids.indexOf(id) === index);
+
+  return orderedIds.map((id) => {
+    const field = defaults.get(id);
     const override = overrides.get(field.id);
     const shown = override?.shown !== undefined ? Boolean(override.shown) : field.shown;
     return {

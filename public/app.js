@@ -820,12 +820,20 @@ function renderJobsAdmin() {
   container.querySelector("#job-form").addEventListener("submit", handleSaveJob);
   container.querySelector("[data-field-add]").addEventListener("click", addFieldBuilderRow);
   container.querySelectorAll("[data-field-remove]").forEach((button) => {
-    button.addEventListener("click", () => button.closest(".field-row").remove());
+    button.addEventListener("click", () => {
+      const list = button.closest(".field-list");
+      button.closest(".field-row").remove();
+      updateFieldOrderButtons(list);
+    });
+  });
+  container.querySelectorAll("[data-field-move]").forEach((button) => {
+    button.addEventListener("click", () => moveFieldRow(button, button.dataset.fieldMove));
   });
   container.querySelectorAll(".standard-field-row").forEach((row) => {
     syncStandardFieldRequiredState(row);
     row.querySelector('[name="standard_shown"]').addEventListener("change", () => syncStandardFieldRequiredState(row));
   });
+  updateFieldOrderButtons(container);
   container.querySelectorAll("[data-job-edit]").forEach((button) => {
     button.addEventListener("click", () => editJob(button.dataset.jobEdit));
   });
@@ -859,6 +867,10 @@ function renderFieldBuilderRow(field = {}) {
       <label>Hint <input name="field_hint" value="${escapeHtml(hint)}" placeholder="Short helper text"></label>
       <label class="checkbox-label field-required"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
       <input name="field_id" type="hidden" value="${escapeHtml(id)}">
+      <div class="field-order-actions" aria-label="Field order">
+        <button type="button" data-field-move="up">Up</button>
+        <button type="button" data-field-move="down">Down</button>
+      </div>
       <button class="danger field-remove" type="button" data-field-remove>Remove</button>
     </div>
   `;
@@ -874,6 +886,10 @@ function renderStandardFieldRow(field) {
       </div>
       <label class="checkbox-label"><input name="standard_shown" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.shown ? "checked" : ""}> Show</label>
       <label class="checkbox-label"><input name="standard_required" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${required ? "checked" : ""} ${field.shown ? "" : "disabled"}> Required</label>
+      <div class="field-order-actions" aria-label="Field order">
+        <button type="button" data-field-move="up">Up</button>
+        <button type="button" data-field-move="down">Down</button>
+      </div>
     </div>
   `;
 }
@@ -892,6 +908,46 @@ function addFieldBuilderRow() {
   list.insertAdjacentHTML("beforeend", renderFieldBuilderRow());
   list.querySelector(".field-row:last-child [data-field-remove]").addEventListener("click", (event) => {
     event.currentTarget.closest(".field-row").remove();
+    updateFieldOrderButtons(list);
+  });
+  list.querySelectorAll(".field-row:last-child [data-field-move]").forEach((button) => {
+    button.addEventListener("click", () => moveFieldRow(button, button.dataset.fieldMove));
+  });
+  updateFieldOrderButtons(list);
+}
+
+function moveFieldRow(button, direction) {
+  const row = button.closest(".standard-field-row, .field-row");
+  const list = row?.parentElement;
+  if (!row || !list) return;
+
+  if (direction === "up" && row.previousElementSibling) {
+    list.insertBefore(row, row.previousElementSibling);
+  }
+
+  if (direction === "down" && row.nextElementSibling) {
+    list.insertBefore(row.nextElementSibling, row);
+  }
+
+  updateFieldOrderButtons(list);
+}
+
+function updateFieldOrderButtons(scope = document) {
+  scope ||= document;
+  [".standard-field-list", ".field-list"].forEach((selector) => {
+    const lists = [
+      ...(scope.matches?.(selector) ? [scope] : []),
+      ...scope.querySelectorAll(selector)
+    ];
+    lists.forEach((list) => {
+      const rows = [...list.querySelectorAll(".standard-field-row, .field-row")];
+      rows.forEach((row, index) => {
+        const up = row.querySelector('[data-field-move="up"]');
+        const down = row.querySelector('[data-field-move="down"]');
+        if (up) up.disabled = index === 0;
+        if (down) down.disabled = index === rows.length - 1;
+      });
+    });
   });
 }
 
