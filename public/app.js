@@ -1075,9 +1075,10 @@ function renderApplicationsAdmin() {
   const selectedInvitedCount = selectedApplications.filter((application) => application.status === "invited").length;
   const selectedAdmittedCount = selectedApplications.filter((application) => application.status === "admitted").length;
   const selectedRejectedCount = selectedApplications.filter((application) => application.status === "rejected").length;
-  const invitationBlocked = selectedCount > selectedUnderReviewCount;
-  const admissionBlocked = selectedRejectedCount > 0;
-  const rejectionBlocked = selectedAdmittedCount > 0;
+  const selectedAllInvited = selectedCount > 0 && selectedInvitedCount === selectedCount;
+  const selectedAllAdmitted = selectedCount > 0 && selectedAdmittedCount === selectedCount;
+  const selectedAllRejected = selectedCount > 0 && selectedRejectedCount === selectedCount;
+  const emailBlocked = selectedCount > 0 && !selectedAllInvited && !selectedAllAdmitted && !selectedAllRejected;
   const selectionSummary = selectedCount
     ? `${selectedUnderReviewCount} under review, ${selectedInvitedCount} invited, ${selectedAdmittedCount} admitted, ${selectedRejectedCount} rejected`
     : "No applicants selected";
@@ -1110,14 +1111,12 @@ function renderApplicationsAdmin() {
         </label>
         <span class="muted">${selectedCount} selected · ${escapeHtml(selectionSummary)}</span>
         <div class="row-actions">
-          <button type="button" data-batch-email="invited" ${selectedCount && !invitationBlocked ? "" : "disabled"}>Send invitation</button>
-          <button type="button" data-batch-email="admitted" ${selectedCount && !admissionBlocked ? "" : "disabled"}>Send admission</button>
-          <button class="danger" type="button" data-batch-email="rejected" ${selectedCount && !rejectionBlocked ? "" : "disabled"}>Send rejection</button>
+          <button type="button" data-batch-email="invited" ${selectedAllInvited ? "" : "disabled"}>Send invitation</button>
+          <button type="button" data-batch-email="admitted" ${selectedAllAdmitted ? "" : "disabled"}>Send admission</button>
+          <button class="danger" type="button" data-batch-email="rejected" ${selectedAllRejected ? "" : "disabled"}>Send rejection</button>
           <button type="button" data-clear-selection ${selectedCount ? "" : "disabled"}>Clear</button>
         </div>
-        ${invitationBlocked ? `<p class="mistake-guard">${selectedCount - selectedUnderReviewCount} selected applicant${selectedCount - selectedUnderReviewCount === 1 ? " is" : "s are"} no longer under review. Remove invited, admitted, or rejected applicants before sending interview invitations.</p>` : ""}
-        ${admissionBlocked ? `<p class="mistake-guard">${selectedRejectedCount} selected applicant${selectedRejectedCount === 1 ? " is" : "s are"} already rejected. Remove rejected applicants from the selection before sending admission emails.</p>` : ""}
-        ${rejectionBlocked ? `<p class="mistake-guard">${selectedAdmittedCount} selected applicant${selectedAdmittedCount === 1 ? " is" : "s are"} already admitted. Remove admitted applicants from the selection before sending rejection emails.</p>` : ""}
+        ${emailBlocked ? `<p class="mistake-guard">Email actions only notify applicants already marked with the matching status. Select only invited, only admitted, or only rejected applicants before sending.</p>` : ""}
       </div>
       <div class="application-list">
         ${filtered.map((application) => {
@@ -1243,32 +1242,12 @@ async function sendBatchDecisionEmails(decision) {
   const label = formatApplicationStatus(decision);
   const actionLabel = batchEmailActionLabel(decision);
   const selectedApplications = state.applications.filter((application) => state.selectedApplicationIds.has(application.id));
-  const admittedSelections = selectedApplications.filter((application) => application.status === "admitted");
-  const rejectedSelections = selectedApplications.filter((application) => application.status === "rejected");
-  const nonReviewSelections = selectedApplications.filter((application) => application.status !== "under_review");
+  const mismatchedSelections = selectedApplications.filter((application) => application.status !== decision);
 
-  if (decision === "invited" && nonReviewSelections.length) {
+  if (mismatchedSelections.length) {
     state.applicationNotice = {
       type: "error",
-      message: `Interview invitations are blocked because ${nonReviewSelections.length} selected applicant${nonReviewSelections.length === 1 ? " is" : "s are"} no longer under review. Clear invited, admitted, or rejected applicants from the selection first.`
-    };
-    renderApplicationsAdmin();
-    return;
-  }
-
-  if (decision === "admitted" && rejectedSelections.length) {
-    state.applicationNotice = {
-      type: "error",
-      message: `Admission emails are blocked because ${rejectedSelections.length} selected applicant${rejectedSelections.length === 1 ? " is" : "s are"} already rejected. Clear rejected applicants from the selection first.`
-    };
-    renderApplicationsAdmin();
-    return;
-  }
-
-  if (decision === "rejected" && admittedSelections.length) {
-    state.applicationNotice = {
-      type: "error",
-      message: `Rejection emails are blocked because ${admittedSelections.length} selected applicant${admittedSelections.length === 1 ? " is" : "s are"} already admitted. Clear admitted applicants from the selection first.`
+      message: `${label} emails are blocked because ${mismatchedSelections.length} selected applicant${mismatchedSelections.length === 1 ? " is" : "s are"} not marked ${label.toLowerCase()}. Clear applicants with other statuses from the selection first.`
     };
     renderApplicationsAdmin();
     return;
@@ -1279,7 +1258,7 @@ async function sendBatchDecisionEmails(decision) {
     admitted: "ADMIT",
     rejected: "REJECT"
   }[decision];
-  const typed = window.prompt(`Type ${confirmationWord} to send ${actionLabel} emails to ${ids.length} selected applicant${ids.length === 1 ? "" : "s"}. Successfully emailed applicants will be marked ${label}.`);
+  const typed = window.prompt(`Type ${confirmationWord} to send ${actionLabel} emails to ${ids.length} selected applicant${ids.length === 1 ? "" : "s"} already marked ${label}.`);
   if (typed !== confirmationWord) {
     state.applicationNotice = { type: "error", message: `Batch ${actionLabel} email cancelled.` };
     renderApplicationsAdmin();

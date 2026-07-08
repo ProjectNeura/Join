@@ -2,6 +2,16 @@ import { applicationStatuses, error, json, readJson, requireDb, workerError } fr
 import { getSmtpStatus, sendApplicationDecisionEmail } from "../../../../_lib/email.js";
 
 const emailDecisions = ["invited", "admitted", "rejected"];
+const decisionLabels = {
+  invited: "Interview invitation",
+  admitted: "Admission",
+  rejected: "Rejection"
+};
+const statusLabels = {
+  invited: "invited",
+  admitted: "admitted",
+  rejected: "rejected"
+};
 
 function normalizeIds(value) {
   if (!Array.isArray(value)) return [];
@@ -36,20 +46,10 @@ export async function onRequestPost({ request, env }) {
       ORDER BY applications.created_at DESC
     `).bind(...ids).all();
 
-    const admittedSelections = results.filter((application) => application.status === "admitted");
-    const rejectedSelections = results.filter((application) => application.status === "rejected");
-    const nonReviewSelections = results.filter((application) => application.status !== "under_review");
+    const mismatchedSelections = results.filter((application) => application.status !== decision);
 
-    if (decision === "invited" && nonReviewSelections.length) {
-      return error(`Interview invitations are blocked because ${nonReviewSelections.length} selected applicant${nonReviewSelections.length === 1 ? " is" : "s are"} no longer under review.`, 409);
-    }
-
-    if (decision === "admitted" && rejectedSelections.length) {
-      return error(`Admission emails are blocked because ${rejectedSelections.length} selected applicant${rejectedSelections.length === 1 ? " is" : "s are"} already rejected.`, 409);
-    }
-
-    if (decision === "rejected" && admittedSelections.length) {
-      return error(`Rejection emails are blocked because ${admittedSelections.length} selected applicant${admittedSelections.length === 1 ? " is" : "s are"} already admitted.`, 409);
+    if (mismatchedSelections.length) {
+      return error(`${decisionLabels[decision]} emails are blocked because ${mismatchedSelections.length} selected applicant${mismatchedSelections.length === 1 ? " is" : "s are"} not marked ${statusLabels[decision]}.`, 409);
     }
 
     const smtp = getSmtpStatus(env);
@@ -67,9 +67,6 @@ export async function onRequestPost({ request, env }) {
           location: application.job_location,
           employment_type: application.job_employment_type
         }, decision);
-        await db.prepare("UPDATE applications SET status = ? WHERE id = ?")
-          .bind(decision, application.id)
-          .run();
         sent.push({
           id: application.id,
           full_name: application.full_name,
