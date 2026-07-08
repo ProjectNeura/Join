@@ -752,7 +752,7 @@ textarea {
 
 .standard-field-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(92px, auto) minmax(120px, auto);
   gap: 12px;
   align-items: center;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -763,6 +763,10 @@ textarea {
 
 .standard-field-row strong {
   display: block;
+}
+
+.standard-field-row .field-order-actions {
+  justify-content: flex-end;
 }
 
 .field-row {
@@ -1083,7 +1087,44 @@ td small {
   }
 
   .standard-field-row {
+    grid-template-columns: minmax(0, 1fr) minmax(145px, auto);
+    align-items: start;
+  }
+
+  .standard-field-row > div:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .standard-field-row .checkbox-label {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .standard-field-row .field-order-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .standard-field-row {
     grid-template-columns: 1fr;
+  }
+
+  .standard-field-row > div:first-child,
+  .standard-field-row .checkbox-label,
+  .standard-field-row .field-order-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .standard-field-row .field-order-actions {
+    justify-content: stretch;
+  }
+
+  .standard-field-row .field-order-actions button {
+    flex: 1;
   }
 }
 
