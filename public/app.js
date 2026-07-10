@@ -228,6 +228,104 @@ function canSendApplicationEmail(application, decision) {
   return !hasDecisionSent(application);
 }
 
+function markdownText(value = "") {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/([`*_{}\[\]()#+.!|>-])/g, "\\$1");
+}
+
+function markdownLine(value = "") {
+  return markdownText(value).replace(/\s+/g, " ").trim();
+}
+
+function markdownUrl(value = "") {
+  const text = String(value || "").trim();
+  return text ? `<${text}>` : "";
+}
+
+function markdownBullet(label, value) {
+  const text = String(value || "").trim();
+  return text ? `- **${markdownText(label)}:** ${markdownLine(text)}` : "";
+}
+
+function applicationEmailState(application) {
+  const states = [];
+  if (hasInvitationSent(application)) {
+    states.push(`Invitation sent${application.invitation_sent_at ? ` (${formatDate(application.invitation_sent_at)})` : ""}`);
+  } else {
+    states.push("Invitation not sent");
+  }
+  if (hasDecisionSent(application)) {
+    states.push(`Decision sent${application.decision_sent_at ? ` (${formatDate(application.decision_sent_at)})` : ""}`);
+  } else {
+    states.push("Decision not sent");
+  }
+  return states.join("; ");
+}
+
+function buildApplicationMarkdown(application, job) {
+  const customAnswers = parseArray(application.custom_answers).filter((answer) => String(answer.value || "").trim());
+  const metadata = [
+    markdownBullet("Job", job?.title || "Deleted job"),
+    markdownBullet("Status", formatApplicationStatus(application.status)),
+    markdownBullet("Email state", applicationEmailState(application)),
+    markdownBullet("Submitted", formatDate(application.created_at)),
+    markdownBullet("Application code", application.lookup_code),
+    markdownBullet("Email", application.email),
+    markdownBullet("Phone", application.phone),
+    markdownBullet("Location", application.location),
+    application.resume_url ? `- **Resume:** ${markdownUrl(application.resume_url)}` : "",
+    application.portfolio_url ? `- **Portfolio:** ${markdownUrl(application.portfolio_url)}` : "",
+    application.linkedin_url ? `- **LinkedIn:** ${markdownUrl(application.linkedin_url)}` : "",
+    markdownBullet("Work authorization", application.work_authorization)
+  ].filter(Boolean);
+  const customSection = customAnswers.length
+    ? [
+      "## Custom Answers",
+      "",
+      ...customAnswers.flatMap((answer) => [
+        `### ${markdownLine(answer.label) || "Question"}`,
+        "",
+        String(answer.value || "").trim(),
+        ""
+      ])
+    ]
+    : [];
+  const coverLetter = String(application.cover_letter || "").trim();
+
+  return [
+    `# ${markdownLine(application.full_name) || "Application"}`,
+    "",
+    ...metadata,
+    "",
+    ...customSection,
+    "## Cover Letter",
+    "",
+    coverLetter || "_No cover letter provided._",
+    ""
+  ].join("\n");
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) {
+    throw new Error("Clipboard copy failed");
+  }
+}
+
 const request = async (url, options = {}) => {
   const { timeoutMs, ...fetchOptions } = options;
   const controller = timeoutMs ? new AbortController() : null;
@@ -1277,6 +1375,7 @@ function renderApplicationsAdmin() {
                     <input type="checkbox" data-application-select="${escapeHtml(application.id)}" ${state.selectedApplicationIds.has(application.id) ? "checked" : ""}>
                     Select
                   </label>
+                  <button type="button" data-application-copy-markdown="${escapeHtml(application.id)}">Copy Markdown</button>
                   <label class="application-status-control">
                     <span>Status</span>
                     <select data-application-status="${escapeHtml(application.id)}">
@@ -1361,6 +1460,9 @@ function renderApplicationsAdmin() {
       updateApplicationStatus(select.dataset.applicationStatus, select.value);
     });
   });
+  container.querySelectorAll("[data-application-copy-markdown]").forEach((button) => {
+    button.addEventListener("click", () => copyApplicationMarkdown(button.dataset.applicationCopyMarkdown));
+  });
   container.querySelectorAll("[data-batch-email]").forEach((button) => {
     button.addEventListener("click", () => sendBatchDecisionEmails(button.dataset.batchEmail));
   });
@@ -1369,6 +1471,24 @@ function renderApplicationsAdmin() {
     state.applicationNotice = null;
     renderApplicationsAdmin();
   });
+}
+
+async function copyApplicationMarkdown(id) {
+  const application = state.applications.find((item) => item.id === id);
+  if (!application) {
+    state.applicationNotice = { type: "error", message: "Application not found." };
+    renderApplicationsAdmin();
+    return;
+  }
+
+  const job = state.adminJobs.find((item) => item.id === application.job_id);
+  try {
+    await copyTextToClipboard(buildApplicationMarkdown(application, job));
+    state.applicationNotice = { type: "success", message: `Copied ${application.full_name}'s application as Markdown.` };
+  } catch (error) {
+    state.applicationNotice = { type: "error", message: error.message };
+  }
+  renderApplicationsAdmin();
 }
 
 async function updateApplicationStatus(id, status) {
