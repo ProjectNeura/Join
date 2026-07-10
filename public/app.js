@@ -1611,7 +1611,12 @@ async function sendMemberCredentials() {
     const failedIds = new Set(result.failed.map((item) => item.id).filter(Boolean));
     state.selectedMemberIds = failedIds;
     await loadAdminData();
-    const failedText = result.failed.length ? ` ${result.failed.length} failed and remain selected.` : "";
+    const failedDetails = result.failed
+      .slice(0, 3)
+      .map((item) => `${item.full_name || item.id || "Member"}: ${item.error || "Failed"}`)
+      .join(" ");
+    const overflowText = result.failed.length > 3 ? ` ${result.failed.length - 3} more failed.` : "";
+    const failedText = result.failed.length ? ` ${result.failed.length} failed and remain selected. ${failedDetails}${overflowText}` : "";
     state.memberNotice = {
       type: result.failed.length ? "error" : "success",
       message: `Created and emailed ${result.sent.length} account${result.sent.length === 1 ? "" : "s"}.${failedText}`

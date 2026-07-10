@@ -17,10 +17,15 @@ function basicAuth(username, password) {
 }
 
 function parseDirectAdminResponse(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return {};
   try {
-    return JSON.parse(text);
+    return JSON.parse(trimmed);
   } catch {
-    const params = new URLSearchParams(text);
+    if (trimmed.startsWith("<") || !trimmed.includes("=")) {
+      return { raw: trimmed };
+    }
+    const params = new URLSearchParams(trimmed);
     return Object.fromEntries(params.entries());
   }
 }
@@ -35,6 +40,26 @@ function responseMessage(result) {
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" ");
+}
+
+function directAdminRawSnippet(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .slice(0, 180)
+    .trim();
+}
+
+function directAdminAuthMessage(response, result) {
+  const raw = String(result?.raw || "");
+  const message = responseMessage(result).toLowerCase();
+  const looksLikeLoginPage = /<form|login|password|directadmin/i.test(raw);
+  const looksLikeAuthError = response.status === 401 || response.status === 403 || message.includes("login") || message.includes("permission") || message.includes("denied");
+
+  if (!looksLikeLoginPage && !looksLikeAuthError) {
+    return "";
+  }
+
+  return "DirectAdmin rejected the request. Check that DIRECTADMIN_USERNAME matches the user that owns the login key, the login key is current, and the key allows CMD_API_POP without an incompatible IP restriction.";
 }
 
 export function getDirectAdminStatus(env) {
@@ -118,9 +143,15 @@ export async function createDirectAdminEmailAccount(env, accountEmail, password)
 
   const text = await response.text();
   const result = parseDirectAdminResponse(text);
+  const authMessage = directAdminAuthMessage(response, result);
 
   if (!response.ok || responseHasError(result)) {
-    throw new Error(responseMessage(result) || `DirectAdmin API request failed with HTTP ${response.status}`);
+    throw new Error(authMessage || responseMessage(result) || `DirectAdmin API request failed with HTTP ${response.status}`);
+  }
+
+  if (result?.raw) {
+    const snippet = directAdminRawSnippet(result.raw);
+    throw new Error(authMessage || `DirectAdmin returned an unexpected response${snippet ? `: ${snippet}` : ""}`);
   }
 
   return {
