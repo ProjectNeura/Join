@@ -1480,6 +1480,7 @@ function renderMembersAdmin() {
         <span class="muted">${selectedCount} selected · ${credentialsSentCount} credentials sent</span>
         <div class="row-actions">
           <button type="button" data-send-member-credentials ${selectedCount ? "" : "disabled"}>Create accounts and send credentials</button>
+          <button class="danger" type="button" data-delete-selected-members ${selectedCount ? "" : "disabled"}>Delete selected</button>
           <button type="button" data-clear-member-selection ${selectedCount ? "" : "disabled"}>Clear</button>
         </div>
       </div>
@@ -1498,6 +1499,7 @@ function renderMembersAdmin() {
                     Select
                   </label>
                   ${member.credentials_sent_at ? `<span class="status-pill email-sent">Credentials sent</span>` : `<span class="status-pill under-review">Credentials pending</span>`}
+                  <button class="danger" type="button" data-member-delete="${escapeHtml(member.id)}">Delete</button>
                 </div>
               </div>
             </div>
@@ -1556,6 +1558,16 @@ function renderMembersAdmin() {
   });
 
   container.querySelector("[data-send-member-credentials]")?.addEventListener("click", () => sendMemberCredentials());
+  container.querySelector("[data-delete-selected-members]")?.addEventListener("click", () => {
+    const selectedMembers = state.members.filter((member) => state.selectedMemberIds.has(member.id));
+    deleteMembers(selectedMembers);
+  });
+  container.querySelectorAll("[data-member-delete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const member = state.members.find((item) => item.id === button.dataset.memberDelete);
+      if (member) deleteMembers([member]);
+    });
+  });
   container.querySelector("[data-clear-member-selection]")?.addEventListener("click", () => {
     state.selectedMemberIds.clear();
     state.memberNotice = null;
@@ -1570,6 +1582,43 @@ function suggestedMemberEmail(member) {
     .replace(/^\.+|\.+$/g, "")
     .slice(0, 48) || "member";
   return `${base}@projectneura.org`;
+}
+
+async function deleteMembers(members) {
+  const items = members.filter(Boolean);
+  if (!items.length) {
+    state.memberNotice = { type: "error", message: "Select at least one member to delete." };
+    renderMembersAdmin();
+    return;
+  }
+
+  const typed = window.prompt(`Type DELETE to remove ${items.length} member record${items.length === 1 ? "" : "s"} from the portal database. DirectAdmin mailboxes will not be deleted.`);
+  if (typed !== "DELETE") {
+    state.memberNotice = { type: "error", message: "Member deletion cancelled." };
+    renderMembersAdmin();
+    return;
+  }
+
+  state.memberNotice = { type: "success", message: "Deleting member records..." };
+  renderMembersAdmin();
+
+  try {
+    const result = await request("/api/admin/members", {
+      method: "DELETE",
+      body: JSON.stringify({ ids: items.map((member) => member.id) })
+    });
+    const deletedIds = new Set(result.deleted.map((member) => member.id));
+    deletedIds.forEach((id) => state.selectedMemberIds.delete(id));
+    await loadAdminData();
+    state.memberNotice = {
+      type: "success",
+      message: `Deleted ${result.deleted.length} member record${result.deleted.length === 1 ? "" : "s"}.`
+    };
+  } catch (error) {
+    state.memberNotice = { type: "error", message: error.message };
+  }
+
+  renderMembersAdmin();
 }
 
 async function sendMemberCredentials() {
