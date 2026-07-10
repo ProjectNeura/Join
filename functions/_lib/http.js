@@ -39,6 +39,23 @@ export function required(value, label) {
   return text;
 }
 
+export function normalizeHttpsUrl(value, label) {
+  const text = normalizeText(value);
+  if (!text) return "";
+  if (!text.startsWith("https://")) {
+    throw new Error(`${label} must start with https://`);
+  }
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:" || !url.hostname) {
+      throw new Error();
+    }
+    return url.href;
+  } catch {
+    throw new Error(`${label} must be a valid https:// URL`);
+  }
+}
+
 function readJsonArray(value) {
   if (Array.isArray(value)) return value;
   if (!value) return [];

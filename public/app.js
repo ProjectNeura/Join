@@ -27,6 +27,9 @@ const defaultStandardFields = [
   { id: "cover_letter", label: "Cover letter", type: "textarea", shown: true, required: true }
 ];
 
+const httpsUrlInputAttributes = 'pattern="https://.*" title="URL must start with https://" placeholder="https://example.com"';
+const resumeUrlInputAttributes = 'pattern="https://.*" title="URL must start with https://" placeholder="https://drive.google.com/..."';
+
 const applicationStatusOptions = [
   { value: "under_review", label: "Under review" },
   { value: "invited", label: "Invited" },
@@ -316,7 +319,7 @@ function renderCustomApplicationFields(fields) {
     }
 
     if (field.type === "url") {
-      return `<label class="full"><span>${label}</span>${hint}<input name="${escapeHtml(name)}" type="url" inputmode="url" ${required}></label>`;
+      return `<label class="full"><span>${label}</span>${hint}<input name="${escapeHtml(name)}" type="url" inputmode="url" ${httpsUrlInputAttributes} ${required}></label>`;
     }
 
     if (field.type === "select") {
@@ -345,8 +348,8 @@ function renderStandardApplicationFields(fields) {
     }
 
     if (field.type === "url") {
-      const placeholder = field.id === "resume_url" ? ' placeholder="Link to PDF, Drive, or portfolio profile"' : "";
-      return `<label class="full">${label}<input name="${escapeHtml(field.id)}" type="url" inputmode="url"${placeholder} ${required}></label>`;
+      const urlAttributes = field.id === "resume_url" ? resumeUrlInputAttributes : httpsUrlInputAttributes;
+      return `<label class="full">${label}<input name="${escapeHtml(field.id)}" type="url" inputmode="url" ${urlAttributes} ${required}></label>`;
     }
 
     return `<label>${label}<input name="${escapeHtml(field.id)}" ${required}></label>`;
@@ -772,7 +775,7 @@ async function renderRegistration(code) {
           <label>Current affiliation <input name="affiliation" value="${escapeHtml(values.affiliation)}" placeholder="School, lab, or company"></label>
           <label>Role title <input name="role_title" value="${escapeHtml(values.role_title)}" placeholder="Research intern"></label>
           <label>Expected start date <input name="start_date" type="date" value="${escapeHtml(values.start_date)}"></label>
-          <label>GitHub URL <input name="github_url" type="url" value="${escapeHtml(values.github_url)}"></label>
+          <label>GitHub URL <input name="github_url" type="url" inputmode="url" ${httpsUrlInputAttributes} value="${escapeHtml(values.github_url)}"></label>
           <label class="full">Mailing address <textarea name="mailing_address">${escapeHtml(values.mailing_address)}</textarea></label>
           <label>Emergency contact <input name="emergency_contact" value="${escapeHtml(values.emergency_contact)}"></label>
           <label>Emergency contact phone <input name="emergency_contact_phone" value="${escapeHtml(values.emergency_contact_phone)}"></label>

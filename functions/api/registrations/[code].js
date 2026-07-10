@@ -1,4 +1,4 @@
-import { error, json, normalizeLookupCode, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../_lib/http.js";
+import { error, json, normalizeHttpsUrl, normalizeLookupCode, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../_lib/http.js";
 
 const textFields = [
   "preferred_name",
@@ -66,6 +66,7 @@ function normalizeMemberPayload(body, application) {
   if (!member.role_title) {
     member.role_title = normalizeText(application.job_title);
   }
+  member.github_url = normalizeHttpsUrl(member.github_url, "GitHub URL");
 
   return member;
 }

@@ -1,4 +1,4 @@
-import { error, json, normalizeFormFields, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueLookupCode, workerError } from "../../_lib/http.js";
+import { error, json, normalizeFormFields, normalizeHttpsUrl, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueLookupCode, workerError } from "../../_lib/http.js";
 import { sendApplicationConfirmation } from "../../_lib/email.js";
 
 export async function onRequestPost({ request, env, waitUntil }) {
@@ -33,16 +33,26 @@ export async function onRequestPost({ request, env, waitUntil }) {
       normalizeText(body[field.id])
     ]));
     for (const field of standardFields) {
+      if (!field.shown) {
+        standardValues[field.id] = "";
+        continue;
+      }
       if (field.shown && field.required && !standardValues[field.id]) {
         throw new Error(`${field.label} is required`);
+      }
+      if (field.type === "url") {
+        standardValues[field.id] = normalizeHttpsUrl(standardValues[field.id], field.label);
       }
     }
     const submittedAnswers = body.custom_answers && typeof body.custom_answers === "object" ? body.custom_answers : {};
     const customAnswers = formFields.map((field) => {
       const rawValue = submittedAnswers[field.id];
-      const value = Array.isArray(rawValue) ? rawValue.join(", ") : normalizeText(rawValue);
+      let value = Array.isArray(rawValue) ? rawValue.join(", ") : normalizeText(rawValue);
       if (field.required && !value) {
         throw new Error(`${field.label} is required`);
+      }
+      if (field.type === "url") {
+        value = normalizeHttpsUrl(value, field.label);
       }
       return {
         id: field.id,
