@@ -14,6 +14,7 @@ const state = {
   emailTemplateVariables: [],
   members: [],
   selectedMemberIds: new Set(),
+  memberAccountEmailDrafts: {},
   memberNotice: null
 };
 
@@ -952,6 +953,9 @@ async function loadAdminData() {
   state.selectedApplicationIds = new Set([...state.selectedApplicationIds].filter((id) => existingIds.has(id)));
   const existingMemberIds = new Set(members.map((member) => member.id));
   state.selectedMemberIds = new Set([...state.selectedMemberIds].filter((id) => existingMemberIds.has(id)));
+  state.memberAccountEmailDrafts = Object.fromEntries(
+    Object.entries(state.memberAccountEmailDrafts).filter(([id]) => existingMemberIds.has(id))
+  );
 }
 
 function renderAdminContent() {
@@ -1630,7 +1634,7 @@ function renderMembersAdmin() {
               ${member.timezone ? `<span>${escapeHtml(member.timezone)}</span>` : ""}
             </div>
             <div class="credential-grid">
-              <label>Project Neura email <input data-member-account-email="${escapeHtml(member.id)}" type="email" value="${escapeHtml(member.account_email || suggestedMemberEmail(member))}" placeholder="name@projectneura.org"></label>
+              <label>Project Neura email <input data-member-account-email="${escapeHtml(member.id)}" type="email" value="${escapeHtml(memberAccountEmailValue(member))}" placeholder="name@projectneura.org"></label>
               <p class="muted">DirectAdmin will create this mailbox and generate a temporary password when credentials are sent.</p>
             </div>
             <div class="member-details">
@@ -1677,6 +1681,12 @@ function renderMembersAdmin() {
     });
   });
 
+  container.querySelectorAll("[data-member-account-email]").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.memberAccountEmailDrafts[input.dataset.memberAccountEmail] = input.value;
+    });
+  });
+
   container.querySelector("[data-send-member-credentials]")?.addEventListener("click", () => sendMemberCredentials());
   container.querySelector("[data-delete-selected-members]")?.addEventListener("click", () => {
     const selectedMembers = state.members.filter((member) => state.selectedMemberIds.has(member.id));
@@ -1704,6 +1714,10 @@ function suggestedMemberEmail(member) {
   return `${base}@projectneura.org`;
 }
 
+function memberAccountEmailValue(member) {
+  return state.memberAccountEmailDrafts[member.id] ?? member.account_email ?? suggestedMemberEmail(member);
+}
+
 async function deleteMembers(members) {
   const items = members.filter(Boolean);
   if (!items.length) {
@@ -1728,7 +1742,10 @@ async function deleteMembers(members) {
       body: JSON.stringify({ ids: items.map((member) => member.id) })
     });
     const deletedIds = new Set(result.deleted.map((member) => member.id));
-    deletedIds.forEach((id) => state.selectedMemberIds.delete(id));
+    deletedIds.forEach((id) => {
+      state.selectedMemberIds.delete(id);
+      delete state.memberAccountEmailDrafts[id];
+    });
     await loadAdminData();
     state.memberNotice = {
       type: "success",
@@ -1746,7 +1763,7 @@ async function sendMemberCredentials() {
   const container = app.querySelector("#admin-content");
   const items = selectedMembers.map((member) => ({
     id: member.id,
-    account_email: container.querySelector(`[data-member-account-email="${CSS.escape(member.id)}"]`)?.value || ""
+    account_email: container.querySelector(`[data-member-account-email="${CSS.escape(member.id)}"]`)?.value || memberAccountEmailValue(member)
   }));
   const missing = items.filter((item) => !item.account_email);
 
