@@ -481,6 +481,13 @@ button:disabled {
   align-items: start;
 }
 
+.job-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .panel {
   padding: clamp(22px, 3vw, 34px);
 }

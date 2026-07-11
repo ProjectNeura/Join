@@ -584,16 +584,18 @@ async function renderJob(slug) {
   const { job } = await request(`/api/jobs/${encodeURIComponent(slug)}`);
   const standardFields = parseArray(job.standard_fields);
   const formFields = parseArray(job.form_fields);
-  app.innerHTML = `
-    <section class="page job-detail">
+  const isClosed = job.status === "closed";
+  const applicationPanel = isClosed ? `
       <div class="panel">
-        <p class="eyebrow">${escapeHtml(job.team || "Project Neura")}</p>
-        <h1>${escapeHtml(job.title)}</h1>
-        <div class="meta">${metaHtml(job)}</div>
-        <h2>About the role</h2>
-        <div class="prose">${renderMarkdown(job.description || job.summary)}</div>
-        ${job.requirements ? `<h2>What we are looking for</h2><div class="prose">${renderMarkdown(job.requirements)}</div>` : ""}
+        <span class="status-pill closed">Closed</span>
+        <h2>Applications are closed</h2>
+        <p class="muted">This role is no longer accepting new applications, but the post remains available for reference.</p>
+        <div class="form-actions">
+          <a class="button ghost" href="/" data-link>Back to jobs</a>
+          <a class="button" href="/check" data-link>Check an application</a>
+        </div>
       </div>
+  ` : `
       <form class="panel" id="application-form">
         <h2>Apply for this role</h2>
         <div id="form-notice"></div>
@@ -608,8 +610,24 @@ async function renderJob(slug) {
           <a class="button ghost" href="/" data-link>Back to jobs</a>
         </div>
       </form>
+  `;
+  app.innerHTML = `
+    <section class="page job-detail">
+      <div class="panel">
+        <div class="job-title-row">
+          <p class="eyebrow">${escapeHtml(job.team || "Project Neura")}</p>
+          ${isClosed ? '<span class="status-pill closed">Closed</span>' : ""}
+        </div>
+        <h1>${escapeHtml(job.title)}</h1>
+        <div class="meta">${metaHtml(job)}</div>
+        <h2>About the role</h2>
+        <div class="prose">${renderMarkdown(job.description || job.summary)}</div>
+        ${job.requirements ? `<h2>What we are looking for</h2><div class="prose">${renderMarkdown(job.requirements)}</div>` : ""}
+      </div>
+      ${applicationPanel}
     </section>
   `;
+  if (isClosed) return;
   app.querySelector("#application-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;

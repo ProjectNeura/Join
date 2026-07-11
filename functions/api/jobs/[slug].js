@@ -4,9 +4,9 @@ export async function onRequestGet({ env, params }) {
   try {
     const db = requireDb(env);
     const job = await db.prepare(`
-      SELECT id, title, slug, team, location, employment_type, salary, summary, description, requirements, standard_fields, form_fields, created_at
+      SELECT id, title, slug, team, location, employment_type, salary, summary, description, requirements, standard_fields, form_fields, status, created_at
       FROM jobs
-      WHERE slug = ? AND status = 'open'
+      WHERE slug = ? AND status IN ('open', 'closed')
     `).bind(params.slug).first();
     if (!job) {
       return error("Job post not found", 404);
