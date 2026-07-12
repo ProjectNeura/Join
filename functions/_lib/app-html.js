@@ -23,6 +23,7 @@ export const APP_HTML = `<!doctype html>
         <nav class="nav" aria-label="Primary">
           <a href="/" data-link>Jobs</a>
           <a href="/check" data-link>Check application</a>
+          <a href="https://projectneura.org" target="_blank" rel="noopener noreferrer">Home</a>
         </nav>
       </header>
       <main id="app" class="app" tabindex="-1"></main>
