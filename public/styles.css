@@ -656,6 +656,33 @@ textarea {
   resize: vertical;
 }
 
+.choice-field {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--surface-alt));
+}
+
+.choice-field legend {
+  padding: 0 4px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.choice-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.choice-grid .checkbox-label {
+  min-height: auto;
+  justify-content: flex-start;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;
@@ -767,6 +794,11 @@ textarea {
   margin: 4px 0 0;
   color: var(--ink-soft);
   white-space: pre-wrap;
+}
+
+.answer-row ul {
+  margin: 6px 0 0 18px;
+  color: var(--ink-soft);
 }
 
 .field-builder {

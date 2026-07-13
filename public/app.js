@@ -31,6 +31,14 @@ const defaultStandardFields = [
 const httpsUrlInputAttributes = 'pattern="https://.*" title="URL must start with https://" placeholder="https://example.com"';
 const resumeUrlInputAttributes = 'pattern="https://.*" title="URL must start with https://" placeholder="https://drive.google.com/..."';
 
+const customFieldTypes = [
+  { value: "text", label: "Text" },
+  { value: "textarea", label: "Long text" },
+  { value: "url", label: "HTTPS URL" },
+  { value: "select", label: "Single choice" },
+  { value: "multi_select", label: "Multiple choice" }
+];
+
 const applicationStatusOptions = [
   { value: "under_review", label: "Under review" },
   { value: "invited", label: "Invited" },
@@ -240,6 +248,13 @@ function markdownLine(value = "") {
 }
 
 function markdownBlock(value = "") {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .map((item) => `- ${markdownLine(item)}`)
+      .join("\n");
+  }
   return String(value || "")
     .trim()
     .replace(/\r\n?/g, "\n")
@@ -263,8 +278,13 @@ function markdownUrl(value = "") {
 }
 
 function markdownBullet(label, value) {
-  const text = String(value || "").trim();
+  const text = Array.isArray(value) ? value.filter(Boolean).join(", ") : String(value || "").trim();
   return text ? `- **${markdownText(label)}:** ${markdownLine(text)}` : "";
+}
+
+function answerHasValue(answer) {
+  const value = answer?.value;
+  return Array.isArray(value) ? value.some((item) => String(item || "").trim()) : Boolean(String(value || "").trim());
 }
 
 function applicationEmailState(application) {
@@ -283,7 +303,7 @@ function applicationEmailState(application) {
 }
 
 function buildApplicationMarkdown(application, job) {
-  const customAnswers = parseArray(application.custom_answers).filter((answer) => String(answer.value || "").trim());
+  const customAnswers = parseArray(application.custom_answers).filter(answerHasValue);
   const metadata = [
     markdownBullet("Job", job?.title || "Deleted job"),
     markdownBullet("Status", formatApplicationStatus(application.status)),
@@ -451,6 +471,24 @@ function renderCustomApplicationFields(fields) {
       `;
     }
 
+    if (field.type === "multi_select") {
+      const options = parseArray(field.options);
+      return `
+        <fieldset class="full choice-field">
+          <legend>${label}</legend>
+          ${hint}
+          <div class="choice-grid">
+            ${options.map((option) => `
+              <label class="checkbox-label">
+                <input name="${escapeHtml(name)}" type="checkbox" value="${escapeHtml(option)}">
+                ${escapeHtml(option)}
+              </label>
+            `).join("")}
+          </div>
+        </fieldset>
+      `;
+    }
+
     return `<label class="full"><span>${label}</span>${hint}<input name="${escapeHtml(name)}" ${required}></label>`;
   }).join("");
 }
@@ -477,19 +515,34 @@ function collectCustomAnswers(form, fields) {
   const data = new FormData(form);
   return Object.fromEntries(parseArray(fields).map((field) => [
     field.id,
-    data.get(fieldInputName(field.id)) || ""
+    field.type === "multi_select"
+      ? data.getAll(fieldInputName(field.id))
+      : data.get(fieldInputName(field.id)) || ""
   ]));
 }
 
+function validateCustomAnswers(form, fields) {
+  const missing = parseArray(fields).find((field) => (
+    field.type === "multi_select" &&
+    field.required &&
+    !new FormData(form).getAll(fieldInputName(field.id)).length
+  ));
+  if (missing) {
+    throw new Error(`${missing.label} is required`);
+  }
+}
+
 function renderCustomAnswers(answers) {
-  const rows = parseArray(answers).filter((answer) => answer.value);
+  const rows = parseArray(answers).filter(answerHasValue);
   if (!rows.length) return "";
   return `
     <div class="answer-list">
       ${rows.map((answer) => `
         <div class="answer-row">
           <strong>${escapeHtml(answer.label)}</strong>
-          <p>${nl2br(answer.value)}</p>
+          ${Array.isArray(answer.value)
+            ? `<ul>${answer.value.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+            : `<p>${nl2br(answer.value)}</p>`}
         </div>
       `).join("")}
     </div>
@@ -655,6 +708,7 @@ async function renderJob(slug) {
     button.disabled = true;
     notice.innerHTML = "";
     try {
+      validateCustomAnswers(form, formFields);
       const { application } = await request("/api/applications", {
         method: "POST",
         body: JSON.stringify({
@@ -1142,10 +1196,10 @@ function renderFieldBuilderRow(field = {}) {
       <label>Label <input name="field_label" value="${escapeHtml(label)}" placeholder="Question"></label>
       <label>Type
         <select name="field_type">
-          ${["text", "textarea", "url", "select"].map((item) => `<option value="${item}" ${type === item ? "selected" : ""}>${item}</option>`).join("")}
+          ${customFieldTypes.map((item) => `<option value="${item.value}" ${type === item.value ? "selected" : ""}>${item.label}</option>`).join("")}
         </select>
       </label>
-      <label>Options <input name="field_options" value="${escapeHtml(options)}" placeholder="For select: Option A, Option B"></label>
+      <label>Options <input name="field_options" value="${escapeHtml(options)}" placeholder="For choice fields: Option A, Option B"></label>
       <label>Hint <input name="field_hint" value="${escapeHtml(hint)}" placeholder="Short helper text"></label>
       <label class="checkbox-label field-required"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
       <input name="field_id" type="hidden" value="${escapeHtml(id)}">

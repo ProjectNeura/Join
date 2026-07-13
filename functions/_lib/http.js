@@ -76,7 +76,7 @@ function readJsonArray(value) {
 }
 
 export function normalizeFormFields(value) {
-  const allowedTypes = new Set(["text", "textarea", "url", "select"]);
+  const allowedTypes = new Set(["text", "textarea", "url", "select", "multi_select"]);
   return readJsonArray(value)
     .map((field, index) => {
       const label = normalizeText(field?.label).slice(0, 120);
@@ -93,7 +93,7 @@ export function normalizeFormFields(value) {
         .replace(/[^a-z0-9_]+/g, "_")
         .replace(/^_+|_+$/g, "")
         .slice(0, 64) || fallbackId;
-      const options = type === "select"
+      const options = ["select", "multi_select"].includes(type)
         ? readJsonArray(field?.options).map(normalizeText).filter(Boolean).slice(0, 12)
         : [];
       return {

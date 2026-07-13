@@ -47,9 +47,25 @@ export async function onRequestPost({ request, env, waitUntil }) {
     const submittedAnswers = body.custom_answers && typeof body.custom_answers === "object" ? body.custom_answers : {};
     const customAnswers = formFields.map((field) => {
       const rawValue = submittedAnswers[field.id];
-      let value = Array.isArray(rawValue) ? rawValue.join(", ") : normalizeText(rawValue);
-      if (field.required && !value) {
+      let value = "";
+      if (field.type === "multi_select") {
+        const rawValues = Array.isArray(rawValue) ? rawValue : rawValue ? [rawValue] : [];
+        const allowedOptions = new Set(field.options);
+        value = rawValues
+          .map(normalizeText)
+          .filter(Boolean)
+          .filter((option, index, options) => options.indexOf(option) === index);
+        if (field.options.length && value.some((option) => !allowedOptions.has(option))) {
+          throw new Error(`${field.label} must use the available options`);
+        }
+      } else {
+        value = Array.isArray(rawValue) ? normalizeText(rawValue[0]) : normalizeText(rawValue);
+      }
+      if (field.required && (Array.isArray(value) ? value.length === 0 : !value)) {
         throw new Error(`${field.label} is required`);
+      }
+      if (field.type === "select" && value && field.options.length && !field.options.includes(value)) {
+        throw new Error(`${field.label} must be one of the available options`);
       }
       if (field.type === "url") {
         value = normalizeHttpsUrl(value, field.label);
