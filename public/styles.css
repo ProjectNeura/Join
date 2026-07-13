@@ -303,9 +303,9 @@ button:disabled {
 
 .jobs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: 16px;
-  max-width: 1180px;
+  max-width: 960px;
   margin: 0 auto;
 }
 
@@ -1188,6 +1188,7 @@ td small {
 @media (max-width: 820px) {
   .topbar,
   .hero,
+  .jobs-grid,
   .job-detail,
   .admin-grid {
     grid-template-columns: 1fr;
