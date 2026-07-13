@@ -558,6 +558,7 @@ button:disabled {
 .prose p,
 .prose ul,
 .prose ol,
+.prose blockquote,
 .prose pre {
   margin: 0 0 14px;
 }
@@ -580,6 +581,20 @@ button:disabled {
 
 .prose li + li {
   margin-top: 6px;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--ink);
+  padding: 2px 0 2px 16px;
+  color: var(--ink);
+}
+
+.prose blockquote p {
+  margin: 0 0 8px;
+}
+
+.prose blockquote p:last-child {
+  margin-bottom: 0;
 }
 
 .prose a {

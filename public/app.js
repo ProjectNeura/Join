@@ -110,6 +110,7 @@ function renderMarkdown(value = "") {
   const blocks = [];
   let paragraph = [];
   let list = null;
+  let blockquote = [];
   let codeFence = null;
 
   const flushParagraph = () => {
@@ -122,6 +123,12 @@ function renderMarkdown(value = "") {
     if (!list) return;
     blocks.push(`<${list.type}>${list.items.map((item) => `<li>${renderMarkdownInline(item)}</li>`).join("")}</${list.type}>`);
     list = null;
+  };
+
+  const flushBlockquote = () => {
+    if (!blockquote.length) return;
+    blocks.push(`<blockquote>${blockquote.map((item) => `<p>${renderMarkdownInline(item)}</p>`).join("")}</blockquote>`);
+    blockquote = [];
   };
 
   const flushCodeFence = () => {
@@ -145,6 +152,7 @@ function renderMarkdown(value = "") {
     if (trimmed.startsWith("```")) {
       flushParagraph();
       flushList();
+      flushBlockquote();
       codeFence = { lines: [] };
       continue;
     }
@@ -152,6 +160,15 @@ function renderMarkdown(value = "") {
     if (!trimmed) {
       flushParagraph();
       flushList();
+      flushBlockquote();
+      continue;
+    }
+
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      flushParagraph();
+      flushList();
+      blockquote.push(quote[1]);
       continue;
     }
 
@@ -159,6 +176,7 @@ function renderMarkdown(value = "") {
     if (heading) {
       flushParagraph();
       flushList();
+      flushBlockquote();
       const level = Math.min(6, heading[1].length + 2);
       blocks.push(`<h${level}>${renderMarkdownInline(heading[2])}</h${level}>`);
       continue;
@@ -168,6 +186,7 @@ function renderMarkdown(value = "") {
     const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
     if (unordered || ordered) {
       flushParagraph();
+      flushBlockquote();
       const type = unordered ? "ul" : "ol";
       if (!list || list.type !== type) {
         flushList();
@@ -178,11 +197,13 @@ function renderMarkdown(value = "") {
     }
 
     flushList();
+    flushBlockquote();
     paragraph.push(trimmed);
   }
 
   flushParagraph();
   flushList();
+  flushBlockquote();
   flushCodeFence();
   return blocks.join("");
 }
