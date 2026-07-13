@@ -1,4 +1,4 @@
-import { error, json, normalizeFormFields, normalizeHttpsUrl, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueLookupCode, workerError } from "../../_lib/http.js";
+import { error, json, normalizeEmail, normalizeFormFields, normalizeHttpsUrl, normalizeStandardFields, normalizeText, readJson, requireDb, required, uniqueLookupCode, workerError } from "../../_lib/http.js";
 import { sendApplicationConfirmation } from "../../_lib/email.js";
 
 export async function onRequestPost({ request, env, waitUntil }) {
@@ -14,7 +14,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
       return error("This job is no longer accepting applications", 404);
     }
 
-    const email = required(body.email, "Email");
+    const email = normalizeEmail(body.email);
     const existingApplication = await db.prepare(`
       SELECT lookup_code
       FROM applications

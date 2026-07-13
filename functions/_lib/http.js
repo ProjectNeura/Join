@@ -39,6 +39,14 @@ export function required(value, label) {
   return text;
 }
 
+export function normalizeEmail(value, label = "Email") {
+  const email = required(value, label).toLowerCase();
+  if (/[\r\n<>]/.test(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error(`${label} must be a valid email address`);
+  }
+  return email;
+}
+
 export function normalizeHttpsUrl(value, label) {
   const text = normalizeText(value);
   if (!text) return "";

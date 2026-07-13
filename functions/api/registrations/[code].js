@@ -1,4 +1,4 @@
-import { error, json, normalizeHttpsUrl, normalizeLookupCode, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../_lib/http.js";
+import { error, json, normalizeEmail, normalizeHttpsUrl, normalizeLookupCode, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../_lib/http.js";
 
 const textFields = [
   "preferred_name",
@@ -53,7 +53,7 @@ async function getAdmittedApplication(db, code) {
 function normalizeMemberPayload(body, application) {
   const member = {
     full_name: required(body.full_name || application.full_name, "Full name"),
-    personal_email: required(body.personal_email || application.email, "Personal email")
+    personal_email: normalizeEmail(body.personal_email || application.email, "Personal email")
   };
 
   for (const field of textFields) {

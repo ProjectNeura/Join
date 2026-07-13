@@ -1,8 +1,4 @@
-import { error, json, normalizeText, publicApplicationStatus, readJson, requireDb, required, workerError } from "../../../_lib/http.js";
-
-function normalizeEmail(value) {
-  return required(value, "Email").toLowerCase();
-}
+import { error, json, normalizeEmail, normalizeText, publicApplicationStatus, readJson, requireDb, workerError } from "../../../_lib/http.js";
 
 function normalizeRecoveryCode(value) {
   return normalizeText(value).replace(/\D/g, "").slice(0, 6);

@@ -137,10 +137,25 @@ function hasSmtpConfig(env) {
   return Boolean(env.SMTP_HOST && env.SMTP_USERNAME && env.SMTP_PASSWORD);
 }
 
-function normalizeAddress(value) {
+function normalizeAddress(value, label = "Email address") {
   const text = String(value || "").trim();
+  if (/[\r\n]/.test(text)) {
+    throw new Error(`${label} contains unsupported line breaks`);
+  }
   const match = text.match(/<([^>]+)>/);
-  return match ? match[1] : text;
+  const address = (match ? match[1] : text).trim();
+  if (/[\r\n<>]/.test(address) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    throw new Error(`${label} is invalid`);
+  }
+  return address;
+}
+
+function normalizeSubject(value) {
+  return String(value || "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 }
 
 function escapeHtml(value) {
@@ -234,7 +249,7 @@ export async function sendSmtp(env, message) {
   }
 
   const apiUrl = env.SMTP_API_URL || defaultSmtpApiUrl;
-  const fromAddress = normalizeAddress(message.from || env.SMTP_FROM || env.SMTP_USERNAME);
+  const fromAddress = normalizeAddress(message.from || env.SMTP_FROM || env.SMTP_USERNAME, "From address");
   const timeoutMs = getSmtpTimeoutMs(env);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -244,8 +259,8 @@ export async function sendSmtp(env, message) {
     username: env.SMTP_USERNAME,
     password: env.SMTP_PASSWORD,
     from: fromAddress,
-    to: normalizeAddress(message.to),
-    subject: message.subject,
+    to: normalizeAddress(message.to, "Recipient address"),
+    subject: normalizeSubject(message.subject),
     body: textToHtml(message.text || message.body || "")
   };
 

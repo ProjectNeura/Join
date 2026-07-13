@@ -239,9 +239,27 @@ function markdownLine(value = "") {
   return markdownText(value).replace(/\s+/g, " ").trim();
 }
 
+function markdownBlock(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(markdownText)
+    .join("\n");
+}
+
 function markdownUrl(value = "") {
   const text = String(value || "").trim();
-  return text ? `<${text}>` : "";
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:") {
+      return markdownLine(text);
+    }
+    return `<${url.href.replace(/>/g, "%3E")}>`;
+  } catch {
+    return markdownLine(text);
+  }
 }
 
 function markdownBullet(label, value) {
@@ -287,12 +305,12 @@ function buildApplicationMarkdown(application, job) {
       ...customAnswers.flatMap((answer) => [
         `### ${markdownLine(answer.label) || "Question"}`,
         "",
-        String(answer.value || "").trim(),
+        markdownBlock(answer.value),
         ""
       ])
     ]
     : [];
-  const coverLetter = String(application.cover_letter || "").trim();
+  const coverLetter = markdownBlock(application.cover_letter);
 
   return [
     `# ${markdownLine(application.full_name) || "Application"}`,
@@ -1066,11 +1084,11 @@ function renderJobsAdmin() {
                   <td>${escapeHtml(formatDate(job.created_at))}</td>
                   <td>
                     <div class="row-actions">
-                      <button type="button" data-job-edit="${job.id}">Edit</button>
-                      ${job.status !== "open" ? `<button type="button" data-job-status="${job.id}" data-status="open">Open</button>` : ""}
-                      ${job.status !== "closed" ? `<button type="button" data-job-status="${job.id}" data-status="closed">Close</button>` : ""}
-                      ${job.status !== "draft" ? `<button type="button" data-job-status="${job.id}" data-status="draft">Draft</button>` : ""}
-                      <button class="danger" type="button" data-job-delete="${job.id}">Delete</button>
+                      <button type="button" data-job-edit="${escapeHtml(job.id)}">Edit</button>
+                      ${job.status !== "open" ? `<button type="button" data-job-status="${escapeHtml(job.id)}" data-status="open">Open</button>` : ""}
+                      ${job.status !== "closed" ? `<button type="button" data-job-status="${escapeHtml(job.id)}" data-status="closed">Close</button>` : ""}
+                      ${job.status !== "draft" ? `<button type="button" data-job-status="${escapeHtml(job.id)}" data-status="draft">Draft</button>` : ""}
+                      <button class="danger" type="button" data-job-delete="${escapeHtml(job.id)}">Delete</button>
                     </div>
                   </td>
                 </tr>

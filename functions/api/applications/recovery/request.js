@@ -1,11 +1,7 @@
-import { error, json, normalizeText, readJson, requireDb, required, workerError } from "../../../_lib/http.js";
+import { error, json, normalizeEmail, normalizeText, readJson, requireDb, workerError } from "../../../_lib/http.js";
 import { sendApplicationRecoveryCode } from "../../../_lib/email.js";
 
 const recoveryMessage = "If that email matches an application, we sent a verification code.";
-
-function normalizeEmail(value) {
-  return required(value, "Email").toLowerCase();
-}
 
 function generateRecoveryCode() {
   const bytes = new Uint8Array(4);
