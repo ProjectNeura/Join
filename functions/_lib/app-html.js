@@ -13,7 +13,7 @@ export const APP_HTML = `<!doctype html>
       <header class="topbar">
         <a class="brand" href="/" data-link>
           <span class="brand-mark" aria-hidden="true">
-            <img src="https://raw.githubusercontent.com/ProjectNeura/ProjectNeura/refs/heads/master/img/logo.svg" alt="">
+            <img src="https://raw.githubusercontent.com/ProjectNeura/ProjectNeura/refs/heads/master/img/logo_nobg.svg" alt="">
           </span>
           <span>
             <strong>Project Neura</strong>
