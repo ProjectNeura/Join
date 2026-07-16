@@ -1180,18 +1180,14 @@ function renderJobsAdmin() {
     button.addEventListener("click", () => {
       const list = button.closest(".field-list");
       button.closest(".field-row").remove();
-      updateFieldOrderButtons(list);
+      setupFieldDragAndDrop(list);
     });
-  });
-  container.querySelectorAll("[data-field-move]").forEach((button) => {
-    button.addEventListener("click", () => moveFieldRow(button, button.dataset.fieldMove));
   });
   container.querySelectorAll(".standard-field-row").forEach((row) => {
     syncStandardFieldRequiredState(row);
     row.querySelector('[name="standard_shown"]').addEventListener("change", () => syncStandardFieldRequiredState(row));
   });
   setupFieldDragAndDrop(container);
-  updateFieldOrderButtons(container);
   container.querySelectorAll("[data-job-edit]").forEach((button) => {
     button.addEventListener("click", () => editJob(button.dataset.jobEdit));
   });
@@ -1215,7 +1211,6 @@ function renderFieldBuilderRow(field = {}) {
   const options = parseArray(field.options).join(", ");
   return `
     <div class="field-row">
-      <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       <label>Label <input name="field_label" value="${escapeHtml(label)}" placeholder="Question"></label>
       <label>Type
         <select name="field_type">
@@ -1227,8 +1222,7 @@ function renderFieldBuilderRow(field = {}) {
       <label class="checkbox-label field-required"><input name="field_required" type="checkbox" ${field.required ? "checked" : ""}> Required</label>
       <input name="field_id" type="hidden" value="${escapeHtml(id)}">
       <div class="field-order-actions" aria-label="Field order">
-        <button type="button" data-field-move="up">Up</button>
-        <button type="button" data-field-move="down">Down</button>
+        <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       </div>
       <button class="danger field-remove" type="button" data-field-remove>Remove</button>
     </div>
@@ -1239,7 +1233,6 @@ function renderStandardFieldRow(field) {
   const required = field.shown && field.required;
   return `
     <div class="standard-field-row">
-      <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       <div>
         <strong>${escapeHtml(field.label)}</strong>
         <p class="muted">${escapeHtml(field.type)}</p>
@@ -1247,8 +1240,7 @@ function renderStandardFieldRow(field) {
       <label class="checkbox-label"><input name="standard_shown" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${field.shown ? "checked" : ""}> Show</label>
       <label class="checkbox-label"><input name="standard_required" type="checkbox" data-standard-id="${escapeHtml(field.id)}" ${required ? "checked" : ""} ${field.shown ? "" : "disabled"}> Required</label>
       <div class="field-order-actions" aria-label="Field order">
-        <button type="button" data-field-move="up">Up</button>
-        <button type="button" data-field-move="down">Down</button>
+        <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       </div>
     </div>
   `;
@@ -1268,48 +1260,9 @@ function addFieldBuilderRow() {
   list.insertAdjacentHTML("beforeend", renderFieldBuilderRow());
   list.querySelector(".field-row:last-child [data-field-remove]").addEventListener("click", (event) => {
     event.currentTarget.closest(".field-row").remove();
-    updateFieldOrderButtons(list);
-  });
-  list.querySelectorAll(".field-row:last-child [data-field-move]").forEach((button) => {
-    button.addEventListener("click", () => moveFieldRow(button, button.dataset.fieldMove));
+    setupFieldDragAndDrop(list);
   });
   setupFieldDragAndDrop(list);
-  updateFieldOrderButtons(list);
-}
-
-function moveFieldRow(button, direction) {
-  const row = button.closest(".standard-field-row, .field-row");
-  const list = row?.parentElement;
-  if (!row || !list) return;
-
-  if (direction === "up" && row.previousElementSibling) {
-    list.insertBefore(row, row.previousElementSibling);
-  }
-
-  if (direction === "down" && row.nextElementSibling) {
-    list.insertBefore(row.nextElementSibling, row);
-  }
-
-  updateFieldOrderButtons(list);
-}
-
-function updateFieldOrderButtons(scope = document) {
-  scope ||= document;
-  [".standard-field-list", ".field-list"].forEach((selector) => {
-    const lists = [
-      ...(scope.matches?.(selector) ? [scope] : []),
-      ...scope.querySelectorAll(selector)
-    ];
-    lists.forEach((list) => {
-      const rows = [...list.querySelectorAll(".standard-field-row, .field-row")];
-      rows.forEach((row, index) => {
-        const up = row.querySelector('[data-field-move="up"]');
-        const down = row.querySelector('[data-field-move="down"]');
-        if (up) up.disabled = index === 0;
-        if (down) down.disabled = index === rows.length - 1;
-      });
-    });
-  });
 }
 
 let draggedFieldRow = null;
@@ -1364,13 +1317,11 @@ function setupFieldDragAndDrop(scope = document) {
       }
       list.classList.remove("is-drag-active");
       draggedFieldRow = null;
-      updateFieldOrderButtons(list);
     });
 
     list.addEventListener("drop", (event) => {
       if (!draggedFieldRow || draggedFieldRow.parentElement !== list) return;
       event.preventDefault();
-      updateFieldOrderButtons(list);
     });
   });
 }
