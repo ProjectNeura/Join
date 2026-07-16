@@ -887,14 +887,28 @@ textarea {
 }
 
 .field-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
   justify-self: start;
   width: 36px;
   height: 36px;
   min-height: 36px;
+  border: 1px solid var(--ink);
   border-radius: var(--radius);
   padding: 0;
+  color: var(--ink);
+  background: transparent;
   cursor: grab;
+  transform: none;
+}
+
+.field-drag-handle:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  transform: none;
 }
 
 .field-drag-handle:active {
@@ -908,7 +922,7 @@ textarea {
   width: 14px;
   height: 2px;
   border-radius: 999px;
-  background: var(--muted);
+  background: var(--ink);
   content: "";
 }
 
