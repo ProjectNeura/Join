@@ -1190,6 +1190,7 @@ function renderJobsAdmin() {
     syncStandardFieldRequiredState(row);
     row.querySelector('[name="standard_shown"]').addEventListener("change", () => syncStandardFieldRequiredState(row));
   });
+  setupFieldDragAndDrop(container);
   updateFieldOrderButtons(container);
   container.querySelectorAll("[data-job-edit]").forEach((button) => {
     button.addEventListener("click", () => editJob(button.dataset.jobEdit));
@@ -1214,6 +1215,7 @@ function renderFieldBuilderRow(field = {}) {
   const options = parseArray(field.options).join(", ");
   return `
     <div class="field-row">
+      <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       <label>Label <input name="field_label" value="${escapeHtml(label)}" placeholder="Question"></label>
       <label>Type
         <select name="field_type">
@@ -1237,6 +1239,7 @@ function renderStandardFieldRow(field) {
   const required = field.shown && field.required;
   return `
     <div class="standard-field-row">
+      <button class="field-drag-handle" type="button" draggable="true" data-field-drag-handle aria-label="Drag to reorder field" title="Drag to reorder field"><span aria-hidden="true"></span></button>
       <div>
         <strong>${escapeHtml(field.label)}</strong>
         <p class="muted">${escapeHtml(field.type)}</p>
@@ -1270,6 +1273,7 @@ function addFieldBuilderRow() {
   list.querySelectorAll(".field-row:last-child [data-field-move]").forEach((button) => {
     button.addEventListener("click", () => moveFieldRow(button, button.dataset.fieldMove));
   });
+  setupFieldDragAndDrop(list);
   updateFieldOrderButtons(list);
 }
 
@@ -1304,6 +1308,69 @@ function updateFieldOrderButtons(scope = document) {
         if (up) up.disabled = index === 0;
         if (down) down.disabled = index === rows.length - 1;
       });
+    });
+  });
+}
+
+let draggedFieldRow = null;
+
+function getFieldRowAfterPointer(list, y) {
+  const rows = [...list.querySelectorAll(".standard-field-row:not(.is-dragging), .field-row:not(.is-dragging)")];
+  return rows.reduce((closest, row) => {
+    const box = row.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset, row };
+    }
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY, row: null }).row;
+}
+
+function setupFieldDragAndDrop(scope = document) {
+  const lists = [
+    ...(scope.matches?.(".standard-field-list, .field-list") ? [scope] : []),
+    ...scope.querySelectorAll(".standard-field-list, .field-list")
+  ];
+
+  lists.forEach((list) => {
+    if (list.dataset.dragReady) return;
+    list.dataset.dragReady = "true";
+
+    list.addEventListener("dragstart", (event) => {
+      const handle = event.target.closest?.("[data-field-drag-handle]");
+      if (!handle || !list.contains(handle)) return;
+      draggedFieldRow = handle.closest(".standard-field-row, .field-row");
+      if (!draggedFieldRow) return;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", "");
+      draggedFieldRow.classList.add("is-dragging");
+      list.classList.add("is-drag-active");
+    });
+
+    list.addEventListener("dragover", (event) => {
+      if (!draggedFieldRow || draggedFieldRow.parentElement !== list) return;
+      event.preventDefault();
+      const afterRow = getFieldRowAfterPointer(list, event.clientY);
+      if (afterRow) {
+        list.insertBefore(draggedFieldRow, afterRow);
+      } else {
+        list.appendChild(draggedFieldRow);
+      }
+    });
+
+    list.addEventListener("dragend", () => {
+      if (draggedFieldRow) {
+        draggedFieldRow.classList.remove("is-dragging");
+      }
+      list.classList.remove("is-drag-active");
+      draggedFieldRow = null;
+      updateFieldOrderButtons(list);
+    });
+
+    list.addEventListener("drop", (event) => {
+      if (!draggedFieldRow || draggedFieldRow.parentElement !== list) return;
+      event.preventDefault();
+      updateFieldOrderButtons(list);
     });
   });
 }
